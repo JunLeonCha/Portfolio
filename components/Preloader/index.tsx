@@ -278,30 +278,53 @@ export default function Preloader() {
   if (done) return null;
 
   return (
-    <div ref={root} data-preloader="" className="fixed inset-0 z-100">
-      {/* Sans JavaScript, le loader ne se lèverait jamais : on ne l'affiche pas. */}
-      <noscript>
-        <style>{"[data-preloader]{display:none}"}</style>
-      </noscript>
-      <span className="sr-only" role="status">
-        Chargement du portfolio…
-      </span>
+    <>
+      <div ref={root} data-preloader="" className="fixed inset-0 z-100">
+        {/* Sans JavaScript, le loader ne se lèverait jamais : on ne l'affiche pas. */}
+        <noscript>
+          <style>{"[data-preloader]{display:none}"}</style>
+        </noscript>
+        <span className="sr-only" role="status">
+          Chargement du portfolio…
+        </span>
 
-      {/* Deux panneaux qui se rejoignent sur la ligne du courant (62 % de la hauteur) :
+        {/* Deux panneaux qui se rejoignent sur la ligne du courant (62 % de la hauteur) :
           à la fin, le haut monte et le bas descend. */}
-      <div
-        data-preloader="top"
-        className="absolute inset-x-0 top-0 h-[62%] bg-background"
-      />
-      <div
-        data-preloader="bottom"
-        className="absolute inset-x-0 bottom-0 h-[38%] bg-background"
-      />
+        <div
+          data-preloader="top"
+          className="absolute inset-x-0 top-0 h-[62%] bg-background"
+        />
+        <div
+          data-preloader="bottom"
+          className="absolute inset-x-0 bottom-0 h-[38%] bg-background"
+        />
 
-      {/* Le courant, centré sur la jonction des panneaux. */}
+        {/* Le nom, à la taille exacte du titre du Hero : GSAP le place et l'agrandit en affiche.
+          Invisible tant qu'il n'est pas positionné (sinon il apparaîtrait un instant en haut à gauche). */}
+        <div
+          ref={name}
+          aria-hidden="true"
+          className={`invisible absolute top-0 left-0 ${NAME_CLASS}`}
+        >
+          {/* Version pâle, là où la lumière n'est pas encore passée. */}
+          <span ref={nameBase} className="block text-foreground/10">
+            <NameContent lit={false} />
+          </span>
+          {/* Version finale (celle du Hero), révélée par le front du courant.
+            Masquée d'office pour ne pas apparaître avant que le JS ne prenne la main. */}
+          <span
+            ref={nameLit}
+            className="absolute inset-0 block mask-[linear-gradient(transparent,transparent)]"
+          >
+            <NameContent lit />
+          </span>
+        </div>
+      </div>
+
       <div
         aria-hidden="true"
-        className="absolute inset-x-0 top-[62%] h-40 -translate-y-1/2"
+        data-preloader="stream"
+        className="pointer-events-none fixed inset-x-0 top-[62%] z-100 h-40 -translate-y-1/2 mix-blend-screen"
       >
         <LifestreamBackground
           overlay
@@ -315,27 +338,6 @@ export default function Preloader() {
           radius={120}
         />
       </div>
-
-      {/* Le nom, à la taille exacte du titre du Hero : GSAP le place et l'agrandit en affiche.
-          Invisible tant qu'il n'est pas positionné (sinon il apparaîtrait un instant en haut à gauche). */}
-      <div
-        ref={name}
-        aria-hidden="true"
-        className={`invisible absolute top-0 left-0 ${NAME_CLASS}`}
-      >
-        {/* Version pâle, là où la lumière n'est pas encore passée. */}
-        <span ref={nameBase} className="block text-foreground/10">
-          <NameContent lit={false} />
-        </span>
-        {/* Version finale (celle du Hero), révélée par le front du courant.
-            Masquée d'office pour ne pas apparaître avant que le JS ne prenne la main. */}
-        <span
-          ref={nameLit}
-          className="absolute inset-0 block mask-[linear-gradient(transparent,transparent)]"
-        >
-          <NameContent lit />
-        </span>
-      </div>
-    </div>
+    </>
   );
 }
