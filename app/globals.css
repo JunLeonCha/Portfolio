@@ -1,26 +1,135 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Interface : neutres sombres, ivoire et champagne.
+     Le vert lumineux reste réservé au curseur Lifestream et aux effets. */
+  --background: #010302;
+  --surface: #101214;
+  --surface-elevated: #1b1d20;
+  --foreground: #f4f1eb;
+  --muted-foreground: #aaa9a5;
+  --border: #343638;
+
+  /* Actions et états interactifs */
+  --primary: #e8c78f;
+  --primary-hover: #f3d9ad;
+  --primary-foreground: #19150e;
+  --secondary: var(--surface);
+  --secondary-hover: var(--surface-elevated);
+  --secondary-foreground: var(--foreground);
+  --accent: #c7b8ea;
+  --ring: var(--primary);
+  --selection: #e8c78f33;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-ring: var(--ring);
+  --color-selection: var(--selection);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, monospace;
 }
 
 body {
+  /* Le fond à z-index négatif reste au-dessus de la couleur du body. */
+  isolation: isolate;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--foreground);
+}
+
+/* Scrollbar : fine, discrète, posée sur le fond. Elle s'éclaire en champagne au survol (Safari). */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--background);
+  /* Place de la barre toujours réservée : quand le loader bloque puis libère le défilement,
+     la largeur de la page ne change pas, rien ne se décale. */
+  scrollbar-gutter: stable;
+}
+
+/* Safari ne connaît pas scrollbar-color : il passe par les pseudo-éléments WebKit.
+   Chrome et Edge, eux, les ignorent dès que scrollbar-color est défini. */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--background);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    /* La bordure transparente + background-clip donnent un pouce plus fin que sa piste. */
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background: var(--border) padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary) padding-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: var(--background);
+  }
+}
+
+html[data-lifestream-cursor="active"],
+html[data-lifestream-cursor="active"] * {
+  cursor: none !important;
+}
+
+.lifestream-cursor__point {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.lifestream-cursor[data-active="true"] .lifestream-cursor__point {
+  opacity: 1;
+}
+
+.lifestream-cursor__core {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgb(235 255 245 / 90%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 150ms ease;
+}
+
+.lifestream-cursor[data-interactive="true"] .lifestream-cursor__core {
+  transform: translate(-50%, -50%) scale(1.8);
+}
+
+.lifestream-cursor[data-pressed="true"] .lifestream-cursor__core {
+  transform: translate(-50%, -50%) scale(0.8);
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .lifestream-cursor {
+    display: none;
+  }
 }

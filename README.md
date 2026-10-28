@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fond animé Pyreflies
 
-## Getting Started
+Adaptation du code fourni en composant React / TypeScript autonome pour Next.js. Aucun runtime d'éditeur, aucune image ni bibliothèque d'animation supplémentaire.
 
-First, run the development server:
+La page d'accueil affiche le fond seul. Lancez `pnpm dev`, puis ouvrez http://localhost:3000.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Derrière le contenu d'une page
+
+```tsx
+import PyrefliesBackground from "@/components/pyreflies-background";
+
+export default function Page() {
+  return (
+    <main className="min-h-svh">
+      <PyrefliesBackground tint="#48ffa5" opacity={0.65} />
+      <h1>Votre contenu</h1>
+    </main>
+  );
+}
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Le composant est fixé à la fenêtre et placé à `z-index: -1`. Le `body` possède déjà `isolation: isolate` dans `app/globals.css`, pour garder le fond visible derrière le contenu. Dans un autre projet, ajoutez cette règle au parent commun. Les sections de contenu doivent avoir un fond transparent pour laisser apparaître l'animation.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Pour le conserver sur toutes les pages, montez une seule instance dans `app/layout.tsx`, à côté de `{children}`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Dans une section
 
-## Learn More
+```tsx
+<section style={{ position: "relative", isolation: "isolate", minHeight: 480 }}>
+  <PyrefliesBackground position="absolute" />
+  <h2>Votre section</h2>
+</section>
+```
 
-To learn more about Next.js, take a look at the following resources:
+Avec `overlay`, le fond devient transparent et les lueurs se mélangent en mode écran à une image ou une couleur placée dessous. `zIndex` permet d'ajuster l'ordre des calques.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Réglages utiles
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Propriété | Effet |
+| --- | --- |
+| `tint` / `tintStrength` | Teinte dominante et force de la teinte |
+| `background` | Couleur de fond et repli sans WebGL |
+| `opacity` | Opacité des lueurs, sans modifier la couleur de fond |
+| `orbs` / `orbSize` | Nombre et rayon des lueurs en pixels CSS |
+| `tempo` / `crossing` | Vitesse globale et durée de traversée avant application du tempo |
+| `mistDensity` / `sparks` | Particules de brume et étincelles par lueur |
+| `maxFps` | Limite de fréquence de rendu |
+| `resolution` / `quality` | Limite du ratio de pixels et résolution relative de la brume |
+| `seed` | `0` pour une composition aléatoire ; une valeur positive la rend reproductible |
+| `paused` | `true` pour une composition fixe, sans boucle d'animation |
 
-## Deploy on Vercel
+Les valeurs initiales se règlent directement dans la signature du composant ; les props permettent de les remplacer pour chaque instance.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Les réglages de voiles, d'enveloppe, de brume, d'irisation et d'apparition du code original restent disponibles dans le type exporté `PyrefliesBackgroundProps`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Pour alléger le rendu sur un appareil modeste :
+
+```tsx
+<PyrefliesBackground orbs={3} mistDensity={60} maxFps={30} resolution={1} />
+```
+
+Le composant laisse passer les clics et reste masqué aux technologies d'assistance. Il suspend le rendu quand l'onglet est masqué ou que la section est hors écran, respecte les changements de `prefers-reduced-motion`, recrée ses ressources après une restauration WebGL et libère les ressources GPU au démontage. Sans WebGL, la couleur de fond CSS reste affichée.
+
+## Vérifications
+
+```sh
+pnpm lint
+pnpm exec tsc --noEmit
+pnpm build
+```
