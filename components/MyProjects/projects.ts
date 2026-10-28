@@ -95,7 +95,7 @@ export const PROJECTS: Project[] = [
     title: "Plume",
     type: "Prototype Android",
     description:
-      "Projet personnel de clavier Android natif en Kotlin, conçu pour évoluer vers une assistance à l'écriture entièrement locale. Le premier prototype implémente un clavier AZERTY minimal, un écran d'activation et un champ de test, sans accès Internet. La correction et la reformulation à l'aide d'un modèle d'IA embarqué sont prévues pour les prochaines étapes.",
+      "Projet personnel de clavier Android natif en Kotlin, conçu pour évoluer vers une assistance à l'écriture entièrement locale. Le premier prototype implémente un clavier AZERTY minimal, un écran d'activation et un champ de test, sans accès Internet.",
     tags: ["Kotlin", "Android SDK", "Gradle"],
   },
 ];
