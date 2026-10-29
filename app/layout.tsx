@@ -15,11 +15,18 @@ const OG_IMAGE = {
   alt: "Léon Cha, développeur Fullstack à Nantes",
 };
 
+// Les réseaux exigent des URL absolues et publiques pour les images de partage :
+// un repli sur localhost rend l'image OG injoignable une fois en ligne.
+function getSiteUrl() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  const vercelHost =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+  if (vercelHost) return `https://${vercelHost}`;
+  return "http://localhost:3000";
+}
+
 export const metadata: Metadata = {
-  // Les réseaux exigent des URL absolues pour les images de partage.
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-  ),
+  metadataBase: new URL(getSiteUrl()),
   title: TITLE,
   description: DESCRIPTION,
   icons: {

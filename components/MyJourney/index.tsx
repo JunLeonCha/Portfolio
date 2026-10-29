@@ -2,11 +2,12 @@
 
 import { useRef, useState, type KeyboardEvent } from "react";
 import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import { JOURNEY_TABS } from "./journey";
 
-gsap.registerPlugin(useGSAP);
+gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 export default function MyJourney() {
   const root = useRef<HTMLElement>(null);
@@ -29,6 +30,9 @@ export default function MyJourney() {
         firstRender.current = false;
         return;
       }
+      // Les onglets n'ont pas la même hauteur : les sections en dessous (À propos…) se décalent,
+      // il faut recalculer les positions des ScrollTrigger, sinon leur reveal part trop tard.
+      ScrollTrigger.refresh();
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       gsap.from("[data-journey='row']", {
         y: 16,
