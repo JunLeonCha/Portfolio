@@ -2,9 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import { INTL_LOCALES, format, type Locale } from "@/i18n/config";
+import type { Dictionary } from "@/i18n/dictionaries";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import { CONTACT_LINKS, EMAIL } from "@/components/Contact/contact";
-import { NAV_LINKS } from "@/components/Navbar/links";
+import { getNavLinks } from "@/components/Navbar/links";
 import { subscribeToLights, type PyrefliesLight } from "@/lib/pyreflies-lights";
 
 const CITY = "Nantes, FR";
@@ -196,7 +198,20 @@ function Wordmark() {
   );
 }
 
-export default function Footer() {
+export default function Footer({
+  dict,
+  contact,
+  nav,
+  lang,
+}: {
+  dict: Dictionary["footer"];
+  /** Libellés des liens « Ailleurs » (ceux de la section Contact). */
+  contact: Dictionary["contact"];
+  /** Libellés de la navigation. */
+  nav: Dictionary["nav"];
+  lang: Locale;
+}) {
+  const NAV_LINKS = getNavLinks(lang, nav);
   const root = useRef<HTMLElement>(null);
   const clock = useRef<HTMLTimeElement>(null);
   const year = useRef<HTMLSpanElement>(null);
@@ -220,7 +235,7 @@ export default function Footer() {
   // Heure locale et année : calculées côté navigateur, après l'hydratation
   // (rendues au serveur, elles seraient figées au moment du build).
   useEffect(() => {
-    const format = new Intl.DateTimeFormat("fr-FR", {
+    const format = new Intl.DateTimeFormat(INTL_LOCALES[lang], {
       hour: "2-digit",
       minute: "2-digit",
       timeZone: TIME_ZONE,
@@ -236,7 +251,7 @@ export default function Footer() {
     if (year.current) year.current.textContent = `${new Date().getFullYear()} `;
     const timer = setInterval(tick, 15_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [lang]);
 
   function backToTop() {
     const reduced = window.matchMedia(
@@ -265,14 +280,13 @@ export default function Footer() {
       <div className="relative grid grid-cols-2 gap-x-8 gap-y-12 md:grid-cols-12">
         <div data-footer="lead" className="col-span-2 md:col-span-6">
           <p className="max-w-md text-2xl leading-tight tracking-tight sm:text-3xl xl:text-4xl">
-            Un projet, un poste,{" "}
-            {/* Espace insécable avant « ? » : il ne part jamais seul à la ligne. */}
-            <span className="font-serif italic">une idée</span>
-            {" ?"}
+            {dict.leadStart}{" "}
+            <span className="font-serif italic">{dict.leadAccent}</span>
+            {dict.leadEnd}
           </p>
           <a
             href={`mailto:${EMAIL}`}
-            aria-label={`Écrire à ${EMAIL}`}
+            aria-label={format(contact.writeTo, { email: EMAIL })}
             className={`group mt-6 inline-flex items-center gap-2 text-primary hover:text-primary-hover ${UNDERLINE}`}
           >
             {EMAIL}
@@ -282,11 +296,11 @@ export default function Footer() {
 
         <nav
           data-footer="column"
-          aria-label="Plan du site"
+          aria-label={dict.siteMap}
           className="md:col-span-2"
         >
           <h2 className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground">
-            Navigation
+            {dict.navigation}
           </h2>
           <ul className="mt-5 flex flex-col gap-3">
             {NAV_LINKS.map((link) => (
@@ -304,22 +318,22 @@ export default function Footer() {
 
         <div data-footer="column" className="md:col-span-2">
           <h2 className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground">
-            Ailleurs
+            {dict.elsewhere}
           </h2>
           <ul className="mt-5 flex flex-col gap-3">
             {CONTACT_LINKS.map((link) => {
               const external = link.href.startsWith("http");
               return (
-                <li key={link.label}>
+                <li key={link.id}>
                   <a
                     href={link.href}
                     {...(external && { target: "_blank", rel: "noreferrer" })}
                     {...(link.download && { download: "" })}
                     className={`text-sm text-foreground/80 hover:text-foreground ${UNDERLINE}`}
                   >
-                    {link.label}
+                    {contact.links[link.id]}
                     {external && (
-                      <span className="sr-only"> (nouvel onglet)</span>
+                      <span className="sr-only"> {contact.newTab}</span>
                     )}
                   </a>
                 </li>
@@ -330,7 +344,7 @@ export default function Footer() {
 
         <div data-footer="column" className="col-span-2 md:col-span-2">
           <h2 className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground">
-            Heure locale
+            {dict.localTime}
           </h2>
           {/* Une seule ligne sur mobile (ville · heure), empilée dans la colonne étroite du desktop. */}
           <p className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm md:flex-col md:items-start">
@@ -360,7 +374,7 @@ export default function Footer() {
         <button
           type="button"
           onClick={backToTop}
-          aria-label="Retour en haut"
+          aria-label={dict.backToTop}
           className="group grid size-10 shrink-0 cursor-pointer place-items-center rounded-full border border-border bg-secondary text-foreground transition-[background-color,border-color] duration-300 hover:border-primary/50 hover:bg-secondary-hover focus-visible:outline-2 focus-visible:outline-ring motion-reduce:transition-none"
         >
           <ArrowIcon className="-rotate-90 transition-transform duration-300 group-hover:-translate-y-0.5 motion-reduce:transition-none" />

@@ -2,66 +2,46 @@ import type { Metadata } from "next";
 import "./globals.css";
 import PyrefliesBackground from "@/components/pyreflies-background";
 import LifestreamCursor from "@/components/lifestream-cursor";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import LangSync from "@/components/LangSync";
 import Preloader from "@/components/Preloader";
+import { DEFAULT_LOCALE } from "@/i18n/config";
+import { en } from "@/i18n/dictionaries/en";
+import { fr } from "@/i18n/dictionaries/fr";
 import { GLOW_COLOR, GLOW_SECONDARY_COLOR } from "@/lib/glow-colors";
+import { getSiteUrl } from "@/lib/site";
 
-const TITLE = "Léon CHA";
-const DESCRIPTION =
-  "Développeur Fullstack, passionné par le développement web et la création d'expériences interactives.";
-const OG_IMAGE = {
-  url: "/og-image.png",
-  width: 1200,
-  height: 630,
-  alt: "Léon Cha, développeur Fullstack à Nantes",
-};
-
-// Les réseaux exigent des URL absolues et publiques pour les images de partage :
-// un repli sur localhost rend l'image OG injoignable une fois en ligne.
-function getSiteUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  const vercelHost =
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
-  if (vercelHost) return `https://${vercelHost}`;
-  return "http://localhost:3000";
-}
-
+// Titre, description et partage sont posés page par page (voir lib/seo.ts) : ils dépendent de la langue.
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
-  title: TITLE,
-  description: DESCRIPTION,
   icons: {
     icon: [{ url: "/icon.png", type: "image/png", sizes: "512x512" }],
     apple: [{ url: "/apple-icon.png", sizes: "180x180" }],
   },
-  openGraph: {
-    type: "website",
-    locale: "fr_FR",
-    url: "/",
-    siteName: TITLE,
-    title: TITLE,
-    description: DESCRIPTION,
-    images: [OG_IMAGE],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: TITLE,
-    description: DESCRIPTION,
-    images: [OG_IMAGE],
-  },
 };
 
+/**
+ * Posé avant le premier affichage : le HTML statique est le même pour toutes les langues,
+ * ce script y inscrit celle de l'URL (`/fr/…`, `/en/…`). Ensuite, LangSync suit les navigations.
+ */
+const SET_LANG = `(function(){var l=location.pathname.split("/")[1];if(l==="fr"||l==="en")document.documentElement.lang=l})()`;
+
+/**
+ * Layout racine UNIQUE (au-dessus de `[lang]`) : le loader, le fond WebGL et le curseur y vivent,
+ * donc un changement de langue ne les remonte pas — seuls la navbar, la page et le footer changent.
+ */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="fr" className="h-full antialiased">
+    // suppressHydrationWarning : `lang` est ajusté par SET_LANG / LangSync selon l'URL.
+    <html lang={DEFAULT_LOCALE} className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SET_LANG }} />
+      </head>
       <body className="min-h-full flex flex-col">
+        <LangSync />
         {/* Dans le layout : monté une seule fois par chargement de document, jamais rejoué par la navigation. */}
-        <Preloader />
+        <Preloader loading={{ fr: fr.preloader.loading, en: en.preloader.loading }} />
         <PyrefliesBackground />
-        <Navbar />
         {children}
-        <Footer />
         {/* Violet des ténèbres façon Riku : tête électrique, filament indigo, refus en rose vif. */}
         <LifestreamCursor
           color={GLOW_COLOR}

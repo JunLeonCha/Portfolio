@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import { useParams } from "next/navigation";
 import LifestreamBackground from "@/components/lifestream-background";
+import { hasLocale, DEFAULT_LOCALE, type Locale } from "@/i18n/config";
 import { GLOW_COLOR, GLOW_SECONDARY_COLOR } from "@/lib/glow-colors";
 import {
   NAME_ACCENT_CLASS,
@@ -101,7 +103,14 @@ function NameContent({ lit }: { lit: boolean }) {
   );
 }
 
-export default function Preloader() {
+export default function Preloader({
+  loading,
+}: {
+  /** Texte annoncé aux lecteurs d'écran, dans chaque langue. */
+  loading: Record<Locale, string>;
+}) {
+  const { lang } = useParams<{ lang?: string }>();
+  const loadingText = loading[lang && hasLocale(lang) ? lang : DEFAULT_LOCALE];
   const root = useRef<HTMLDivElement>(null);
   const name = useRef<HTMLDivElement>(null);
   const nameBase = useRef<HTMLSpanElement>(null);
@@ -311,7 +320,7 @@ export default function Preloader() {
           }
         </style>
         <span className="sr-only" role="status">
-          Chargement du portfolio…
+          {loadingText}
         </span>
 
         {/* Deux panneaux qui se rejoignent sur la ligne du courant (62 % de la hauteur) :

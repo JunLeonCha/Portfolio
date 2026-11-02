@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { format } from "@/i18n/config";
+import type { Dictionary } from "@/i18n/dictionaries";
 import type { ProjectShot } from "./projects";
 
 const ARROW_CLASS =
@@ -32,10 +34,13 @@ function Arrow({ flip = false }: { flip?: boolean }) {
 export default function ProjectGallery({
   shots,
   title,
+  dict,
 }: {
   shots: ProjectShot[];
   title: string;
+  dict: Dictionary["projectPage"];
 }) {
+  const labels = dict.gallery;
   const track = useRef<HTMLUListElement>(null);
   const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
   const [index, setIndex] = useState(0);
@@ -83,12 +88,15 @@ export default function ProjectGallery({
 
   return (
     <section
-      aria-roledescription="carrousel"
-      aria-label={`Captures de ${title}`}
+      aria-roledescription={labels.roleDescription}
+      aria-label={format(labels.label, { title })}
       className="mt-24"
     >
       <h2 className="text-2xl tracking-tight md:text-3xl">
-        En <span className="font-serif italic text-primary">images</span>
+        {dict.galleryStart}{" "}
+        <span className="font-serif italic text-primary">
+          {dict.galleryAccent}
+        </span>
       </h2>
 
       <ul
@@ -96,7 +104,7 @@ export default function ProjectGallery({
         onScroll={sync}
         // Focusable pour défiler aux flèches du clavier.
         tabIndex={0}
-        aria-label="Liste des captures"
+        aria-label={labels.list}
         onPointerDown={(event) => {
           // Glisser à la souris ; le tactile défile nativement.
           if (event.pointerType !== "mouse" || event.button !== 0) return;
@@ -142,8 +150,11 @@ export default function ProjectGallery({
           return (
             <li
               key={shot.src}
-              aria-roledescription="diapositive"
-              aria-label={`${i + 1} sur ${shots.length}`}
+              aria-roledescription={labels.slideRoleDescription}
+              aria-label={format(labels.slideOf, {
+                current: i + 1,
+                total: shots.length,
+              })}
               aria-current={active}
               onClick={() => !active && goTo(i)}
               className={`w-[84%] shrink-0 snap-center transition-[opacity,transform] duration-500 ease-out md:w-[68%] xl:w-[56%] motion-reduce:transition-none ${active ? "scale-100 opacity-100" : "scale-[0.94] opacity-45 hover:opacity-70"}`}
@@ -191,14 +202,14 @@ export default function ProjectGallery({
         <div
           className="flex items-center gap-2"
           role="group"
-          aria-label="Aller à une capture"
+          aria-label={labels.goTo}
         >
           {shots.map((shot, i) => (
             <button
               key={shot.src}
               type="button"
               onClick={() => goTo(i)}
-              aria-label={`Capture ${i + 1}`}
+              aria-label={format(labels.shot, { n: i + 1 })}
               aria-current={i === index}
               className="group grid h-6 place-items-center px-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
@@ -214,7 +225,7 @@ export default function ProjectGallery({
             type="button"
             onClick={() => goTo(index - 1)}
             disabled={index === 0}
-            aria-label="Capture précédente"
+            aria-label={labels.previous}
             className={ARROW_CLASS}
           >
             <Arrow flip />
@@ -223,7 +234,7 @@ export default function ProjectGallery({
             type="button"
             onClick={() => goTo(index + 1)}
             disabled={index === last}
-            aria-label="Capture suivante"
+            aria-label={labels.next}
             className={ARROW_CLASS}
           >
             <Arrow />

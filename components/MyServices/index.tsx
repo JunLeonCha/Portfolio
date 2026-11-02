@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef } from "react";
+import { format } from "@/i18n/config";
+import type { Dictionary } from "@/i18n/dictionaries";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import { SERVICES, type Service, type ServiceTone } from "./services";
 
@@ -19,7 +21,14 @@ const TONES: Record<ServiceTone, { badge: string; tag: string; glow: string }> =
     },
   };
 
-function ServiceCard({ service }: { service: Service }) {
+function ServiceCard({
+  service,
+  dict,
+}: {
+  service: Service;
+  dict: Dictionary["services"];
+}) {
+  const text = dict.items[service.id];
   const tone = TONES[service.tone ?? "primary"];
   return (
     <article
@@ -42,13 +51,13 @@ function ServiceCard({ service }: { service: Service }) {
       </div>
 
       <div className="relative">
-        <h3 className="text-2xl tracking-tight">{service.title}</h3>
+        <h3 className="text-2xl tracking-tight">{text.title}</h3>
         <p className="mt-3 max-w-sm text-sm text-muted-foreground">
-          {service.description}
+          {text.description}
         </p>
         {service.tags && service.tags.length > 0 && (
           <ul
-            aria-label={`Technologies : ${service.title}`}
+            aria-label={format(dict.tagsLabel, { title: text.title })}
             className="mt-5 flex flex-wrap gap-2"
           >
             {service.tags.map((tag) => (
@@ -56,7 +65,7 @@ function ServiceCard({ service }: { service: Service }) {
                 key={tag}
                 className={`rounded-full px-3 py-1.5 text-xs ${tone.tag}`}
               >
-                {tag}
+                {dict.tagLabels[tag] ?? tag}
               </li>
             ))}
           </ul>
@@ -66,7 +75,11 @@ function ServiceCard({ service }: { service: Service }) {
   );
 }
 
-export default function MyServices() {
+export default function MyServices({
+  dict,
+}: {
+  dict: Dictionary["services"];
+}) {
   const root = useRef<HTMLElement>(null);
 
   useScrollReveal(root, (tl) => {
@@ -92,20 +105,20 @@ export default function MyServices() {
           data-services="title"
           className="text-[3.5rem] xl:text-[5rem] leading-none tracking-tight"
         >
-          Services &{" "}
+          {dict.titleStart}{" "}
           {/* pr-2 évite que la dernière lettre en italique soit rognée par bg-clip-text */}
           <span className="font-serif italic font-normal pr-2 bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
-            expertises
+            {dict.titleAccent}
           </span>
         </h2>
         <p data-services="text" className="text-muted-foreground">
-          Le souci du détail, de l&apos;interface jusqu&apos;au code.
+          {dict.subtitle}
         </p>
       </div>
 
       <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {SERVICES.map((service) => (
-          <ServiceCard key={service.title} service={service} />
+          <ServiceCard key={service.id} service={service} dict={dict} />
         ))}
       </div>
     </section>

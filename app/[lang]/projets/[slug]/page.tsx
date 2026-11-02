@@ -5,32 +5,37 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import ProjectGallery from "@/components/MyProjects/project-gallery";
 import {
-  PROJECTS,
-  getProject,
+  PROJECT_SLUGS,
+  getProjects,
   projectHref,
 } from "@/components/MyProjects/projects";
+import { format, hasLocale, localePath, type Locale } from "@/i18n/config";
+import { getDictionary } from "@/i18n/dictionaries";
+import { pageMetadata } from "@/lib/seo";
 
+// Le layout fournit les langues : ici, seulement les slugs (Next combine les deux).
 export function generateStaticParams() {
-  return PROJECTS.map(({ slug }) => ({ slug }));
+  return PROJECT_SLUGS.map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({
   params,
-}: PageProps<"/projets/[slug]">): Promise<Metadata> {
-  const project = getProject((await params).slug);
+}: PageProps<"/[lang]/projets/[slug]">): Promise<Metadata> {
+  const { lang, slug } = await params;
+  if (!hasLocale(lang)) return {};
+  const dict = await getDictionary(lang);
+  const project = getProjects(dict.projects).find((p) => p.slug === slug);
   if (!project) return {};
-  const title = `${project.title} | Léon CHA`;
-  return {
-    title,
+  return pageMetadata({
+    lang,
+    path: `/projets/${project.slug}`,
+    title: format(dict.meta.projectTitle, { title: project.title }),
     description: project.description,
-    alternates: { canonical: projectHref(project) },
-    openGraph: {
-      title,
-      description: project.description,
-      url: projectHref(project),
-      ...(project.image && { images: [{ url: project.image }] }),
-    },
-  };
+    siteName: dict.meta.siteName,
+    // Capture du projet quand elle existe, sinon l'image de partage du site.
+    ...(project.image && { image: { url: project.image } }),
+    imageAlt: format(dict.projects.imageAlt, { title: project.title }),
+  });
 }
 
 const LABEL =
@@ -82,14 +87,17 @@ function Shot({
   );
 }
 
-export default function ProjectPage({ params }: PageProps<"/projets/[slug]">) {
+export default function ProjectPage({
+  params,
+}: PageProps<"/[lang]/projets/[slug]">) {
   // `params` est une donnée de requête : son accès reste sous Suspense pour garder une coquille instantanée.
   return (
     <main className="px-8 pt-36 pb-24 md:pt-44 xl:px-24">
       <Suspense fallback={<ProjectSkeleton />}>
-        {params.then(({ slug }) => (
-          <ProjectContent slug={slug} />
-        ))}
+        {params.then(({ lang, slug }) => {
+          if (!hasLocale(lang)) notFound();
+          return <ProjectContent lang={lang} slug={slug} />;
+        })}
       </Suspense>
     </main>
   );
@@ -105,23 +113,26 @@ function ProjectSkeleton() {
   );
 }
 
-function ProjectContent({ slug }: { slug: string }) {
-  const project = getProject(slug);
+async function ProjectContent({ lang, slug }: { lang: Locale; slug: string }) {
+  const dict = await getDictionary(lang);
+  const projects = getProjects(dict.projects);
+  const project = projects.find((p) => p.slug === slug);
   if (!project) notFound();
 
-  const index = PROJECTS.indexOf(project);
-  const previous = PROJECTS[(index - 1 + PROJECTS.length) % PROJECTS.length];
-  const next = PROJECTS[(index + 1) % PROJECTS.length];
+  const t = dict.projectPage;
+  const index = projects.indexOf(project);
+  const previous = projects[(index - 1 + projects.length) % projects.length];
+  const next = projects[(index + 1) % projects.length];
   const { gallery = [], highlights = [], tags = [] } = project;
 
   return (
     <>
       <Link
-        href="/projets"
+        href={localePath(lang, "/projets")}
         className="inline-flex items-center gap-2 rounded-full text-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring motion-reduce:transition-none"
       >
         <Arrow flip />
-        Tous les projets
+        {t.allProjects}
       </Link>
 
       <header className="mt-10 max-w-4xl">
@@ -140,20 +151,20 @@ function ProjectContent({ slug }: { slug: string }) {
         {project.image ? (
           <Shot
             src={project.image}
-            alt={`Capture du projet ${project.title}`}
+            alt={format(dict.projects.imageAlt, { title: project.title })}
             position={project.imagePosition}
             eager
           />
         ) : (
           <div className="grid aspect-16/10 place-items-center rounded-2xl border border-border/60 bg-surface-elevated/40 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground/60">
-            Aperçu à venir
+            {project.noImageLabel ?? dict.projects.comingSoon}
           </div>
         )}
 
         <aside className="flex flex-col gap-8">
           <section aria-labelledby="about-title">
             <h2 id="about-title" className={LABEL}>
-              Le projet
+              {t.about}
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
               {project.description}
@@ -163,7 +174,7 @@ function ProjectContent({ slug }: { slug: string }) {
           {tags.length > 0 && (
             <section aria-labelledby="stack-title">
               <h2 id="stack-title" className={LABEL}>
-                Technologies
+                {t.technologies}
               </h2>
               <ul className="mt-4 flex flex-wrap gap-2">
                 {tags.map((tag) => (
@@ -186,7 +197,10 @@ function ProjectContent({ slug }: { slug: string }) {
             id="highlights-title"
             className="text-2xl tracking-tight md:text-3xl"
           >
-            Points <span className="font-serif italic text-primary">clés</span>
+            {t.highlightsStart}{" "}
+            <span className="font-serif italic text-primary">
+              {t.highlightsAccent}
+            </span>
           </h2>
           <ul className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {highlights.map((highlight) => (
@@ -202,28 +216,28 @@ function ProjectContent({ slug }: { slug: string }) {
       )}
 
       {gallery.length > 0 && (
-        <ProjectGallery shots={gallery} title={project.title} />
+        <ProjectGallery shots={gallery} title={project.title} dict={t} />
       )}
 
       <nav
-        aria-label="Autres projets"
+        aria-label={t.otherProjects}
         className="mt-24 grid gap-4 border-t border-border/70 pt-10 sm:grid-cols-2"
       >
-        <Link href={projectHref(previous)} className={NEIGHBOUR}>
+        <Link href={projectHref(lang, previous)} className={NEIGHBOUR}>
           <span className={`inline-flex items-center gap-2 ${LABEL}`}>
             <Arrow flip />
-            Projet précédent
+            {t.previous}
           </span>
           <span className="text-xl tracking-tight group-hover:text-primary">
             {previous.title}
           </span>
         </Link>
         <Link
-          href={projectHref(next)}
+          href={projectHref(lang, next)}
           className={`${NEIGHBOUR} sm:items-end sm:text-right`}
         >
           <span className={`inline-flex items-center gap-2 ${LABEL}`}>
-            Projet suivant
+            {t.next}
             <Arrow />
           </span>
           <span className="text-xl tracking-tight group-hover:text-primary">

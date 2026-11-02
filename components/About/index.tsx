@@ -2,9 +2,10 @@
 
 import { useRef } from "react";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
-import { INTRO, PARAGRAPHS, STATS } from "./about";
+import type { Dictionary } from "@/i18n/dictionaries";
+import { RichText, STATS } from "./about";
 
-export default function About() {
+export default function About({ dict }: { dict: Dictionary["about"] }) {
   const root = useRef<HTMLElement>(null);
 
   useScrollReveal(root, (tl) => {
@@ -48,10 +49,10 @@ export default function About() {
           data-about="title"
           className="text-[3.5rem] xl:text-[5rem] leading-none tracking-tight lg:sticky lg:top-32"
         >
-          À propos{" "}
+          {dict.titleStart}{" "}
           {/* pr-2 évite que la dernière lettre en italique soit rognée par bg-clip-text */}
           <span className="font-serif italic font-normal pr-2 bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
-            de moi
+            {dict.titleAccent}
           </span>
         </h2>
       </div>
@@ -61,29 +62,29 @@ export default function About() {
           data-about="intro"
           className="max-w-2xl leading-relaxed text-foreground"
         >
-          {INTRO}
+          <RichText text={dict.intro} />
         </p>
 
         <div className="mt-6 flex max-w-2xl flex-col gap-6 text-muted-foreground">
-          {PARAGRAPHS.map((paragraph, i) => (
+          {dict.paragraphs.map((paragraph, i) => (
             <p key={i} data-about="paragraph" className="leading-relaxed">
-              {paragraph}
+              <RichText text={paragraph} />
             </p>
           ))}
         </div>
 
         <dl
-          aria-label="Chiffres clés"
+          aria-label={dict.statsLabel}
           className="mt-14 grid grid-cols-2 border-t border-border/60"
         >
           {STATS.map((stat, i) => (
             <div
-              key={stat.label}
+              key={dict.stats[i]}
               data-about="stat"
               className={`flex flex-col-reverse gap-2 pt-8 ${i > 0 ? "border-l border-border/60 pl-8" : ""}`}
             >
               <dt className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground">
-                {stat.label}
+                {dict.stats[i]}
               </dt>
               <dd className="font-serif text-5xl text-primary xl:text-6xl">
                 {"value" in stat ? (

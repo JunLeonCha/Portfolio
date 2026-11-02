@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { format } from "@/i18n/config";
+import type { Dictionary } from "@/i18n/dictionaries";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import { CONTACT_LINKS, EMAIL } from "./contact";
 
@@ -41,7 +43,11 @@ function CheckIcon() {
   );
 }
 
-export default function Contact() {
+export default function Contact({
+  dict,
+}: {
+  dict: Dictionary["contact"];
+}) {
   const root = useRef<HTMLElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -94,17 +100,17 @@ export default function Contact() {
             data-contact="title"
             className="text-[3.5rem] xl:text-[5rem] leading-none tracking-tight"
           >
-            Travaillons{" "}
+            {dict.titleStart}{" "}
             {/* pr-2 évite que la dernière lettre en italique soit rognée par bg-clip-text */}
             <span className="font-serif italic font-normal pr-2 bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
-              ensemble
+              {dict.titleAccent}
             </span>
           </h2>
           <p
             data-contact="text"
             className="mt-6 max-w-md text-lg text-muted-foreground"
           >
-            Transformer vos idées en applications simples, fiables et durables.
+            {dict.text}
           </p>
         </div>
 
@@ -116,35 +122,35 @@ export default function Contact() {
               className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-primary p-4 text-primary-foreground shadow-[0_0_16px] shadow-primary/25 transition-[background-color,box-shadow] duration-300 hover:bg-primary-hover hover:shadow-[0_0_30px] hover:shadow-primary/50 focus-visible:shadow-[0_0_30px] focus-visible:shadow-primary/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none"
             >
               {copied ? <CheckIcon /> : <CopyIcon />}
-              {copied ? "E-mail copié" : "Copier mon e-mail"}
+              {copied ? dict.copied : dict.copy}
             </button>
             <a
               href={`mailto:${EMAIL}`}
-              aria-label={`Écrire à ${EMAIL}`}
+              aria-label={format(dict.writeTo, { email: EMAIL })}
               className="self-center font-mono text-xs text-muted-foreground transition-colors duration-300 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring motion-reduce:transition-none"
             >
               {EMAIL}
             </a>
             {/* Annonce la copie aux lecteurs d'écran. */}
             <span className="sr-only" aria-live="polite">
-              {copied ? "Adresse e-mail copiée dans le presse-papiers" : ""}
+              {copied ? dict.copiedAnnouncement : ""}
             </span>
           </div>
 
-          <ul aria-label="Réseaux et CV" className="flex flex-wrap gap-3">
+          <ul aria-label={dict.linksLabel} className="flex flex-wrap gap-3">
             {CONTACT_LINKS.map((link) => {
               const external = link.href.startsWith("http");
               return (
-                <li key={link.label} data-contact="action">
+                <li key={link.id} data-contact="action">
                   <a
                     href={link.href}
                     {...(external && { target: "_blank", rel: "noreferrer" })}
                     {...(link.download && { download: "" })}
                     className="inline-flex rounded-full border border-border bg-secondary px-5 py-2.5 text-sm text-secondary-foreground transition-[background-color,border-color] duration-300 hover:border-primary/50 hover:bg-secondary-hover focus-visible:outline-2 focus-visible:outline-ring motion-reduce:transition-none"
                   >
-                    {link.label}
+                    {dict.links[link.id]}
                     {external && (
-                      <span className="sr-only"> (nouvel onglet)</span>
+                      <span className="sr-only"> {dict.newTab}</span>
                     )}
                   </a>
                 </li>

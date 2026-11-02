@@ -4,8 +4,8 @@ import { AgentIcon, DatabaseIcon, GaugeIcon, MonitorIcon, WaveIcon } from "./ico
 export type ServiceTone = "primary" | "accent";
 
 export type Service = {
-  title: string;
-  description: string;
+  /** Clé du texte dans le dictionnaire (`services.items`). */
+  id: string;
   icon: ReactNode;
   tags?: string[];
   /** Occupe deux colonnes sur la grille (sinon une). */
@@ -19,14 +19,13 @@ export type Service = {
 };
 
 /**
- * Cartes de la section Services. L'ordre du tableau est l'ordre de la grille (3 colonnes) :
- * Une carte `wide` occupe deux colonnes, les autres une seule.
+ * Cartes de la section Services (textes : dictionnaire, `services.items`).
+ * L'ordre du tableau est l'ordre de la grille (3 colonnes) :
+ * une carte `wide` occupe deux colonnes, les autres une seule.
  */
 export const SERVICES: Service[] = [
   {
-    title: "Frontend & interfaces",
-    description:
-      "Des interfaces soignées, accessibles et rapides, de la maquette jusqu'aux composants réutilisables d'un design system.",
+    id: "frontend",
     icon: <MonitorIcon />,
     tags: [
       "React",
@@ -45,9 +44,7 @@ export const SERVICES: Service[] = [
     highlight: true,
   },
   {
-    title: "Backend & bases de données",
-    description:
-      "Les API, les données et les règles qui font tourner le produit, jusqu'à sa mise en production.",
+    id: "backend",
     icon: <DatabaseIcon />,
     tags: [
       "Node.js",
@@ -61,24 +58,18 @@ export const SERVICES: Service[] = [
     ],
   },
   {
-    title: "Performance, SEO & refonte",
-    description:
-      "Audit et modernisation d'applications existantes : Core Web Vitals, accessibilité et SEO technique.",
+    id: "performance",
     icon: <GaugeIcon />,
     tags: ["Core Web Vitals", "SEO technique", "Accessibilité"],
   },
   {
-    title: "Expériences interactives",
-    description:
-      "Animations et rendus WebGL qui donnent du caractère à un produit",
+    id: "interactive",
     icon: <WaveIcon />,
     tags: ["GSAP", "Motion", "AnimeJS"],
     tone: "accent",
   },
   {
-    title: "Agents IA & automatisation",
-    description:
-      "Conception d'agents IA et automatisation de tâches : LLM enrichis par les données du projet grâce au RAG, outils connectés via MCP et skills adaptés aux besoins.",
+    id: "ai",
     icon: <AgentIcon />,
     tags: [
       "Claude",

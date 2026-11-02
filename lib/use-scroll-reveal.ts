@@ -22,6 +22,8 @@ export function useScrollReveal(
 ) {
   useGSAP(
     () => {
+      // Racine absente (rendu interrompu, sous-arbre masqué) : rien à animer.
+      if (!scope.current) return;
       const mm = gsap.matchMedia();
       mm.add("(prefers-reduced-motion: no-preference)", () => {
         // En pause : les éléments restent cachés sous le loader, le ScrollTrigger arrive quand il se lève.

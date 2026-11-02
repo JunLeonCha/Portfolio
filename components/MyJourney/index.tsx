@@ -5,11 +5,16 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
-import { JOURNEY_TABS } from "./journey";
+import type { Dictionary } from "@/i18n/dictionaries";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
-export default function MyJourney() {
+export default function MyJourney({
+  dict,
+}: {
+  dict: Dictionary["journey"];
+}) {
+  const JOURNEY_TABS = dict.tabs;
   const root = useRef<HTMLElement>(null);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const [active, setActive] = useState(0);
@@ -81,10 +86,10 @@ export default function MyJourney() {
           data-journey="title"
           className="text-[3.5rem] xl:text-[5rem] leading-none tracking-tight"
         >
-          Mon{" "}
+          {dict.titleStart}{" "}
           {/* pr-2 évite que la dernière lettre en italique soit rognée par bg-clip-text */}
           <span className="font-serif italic font-normal pr-2 bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
-            parcours
+            {dict.titleAccent}
           </span>
         </h2>
 
@@ -92,7 +97,7 @@ export default function MyJourney() {
         <div
           data-journey="tabs"
           role="tablist"
-          aria-label="Afficher l'expérience ou la formation"
+          aria-label={dict.tabsLabel}
           className="relative grid auto-cols-fr grid-flow-col self-start rounded-full border border-border/50 bg-surface/30 p-1 backdrop-blur-xl md:self-auto"
         >
           <span

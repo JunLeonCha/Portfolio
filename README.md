@@ -1,17 +1,17 @@
 # Léon Cha — Portfolio
 
-Portfolio personnel de Léon Cha, développeur Full Stack basé à Nantes. Le site présente mes expertises, mes réalisations et mon parcours dans une interface sombre, animée par un fond WebGL et un curseur personnalisé.
+Portfolio personnel de Léon Cha, développeur Full Stack basé à Nantes. Le site présente mes expertises, mes projets et mon parcours dans une interface sombre, animée par un fond WebGL et un curseur personnalisé.
 
 ![Accueil du portfolio de Léon Cha sur ordinateur](docs/screenshots/accueil-desktop.webp)
 
 ## Fonctionnalités
 
 - **Services et expertises** : frontend, backend, performance, expériences interactives et agents IA.
-- **Réalisations** : trois projets mis en avant, avec une galerie complète accessible dans une modale.
+- **Projets** : trois projets mis en avant sur l'accueil, une page dédiée avec la liste complète et une fiche détaillée par projet (galerie de captures en carrousel).
 - **Parcours** : expériences professionnelles et formations organisées en onglets.
 - **À propos et contact** : présentation, liens professionnels, contact par e-mail et CV téléchargeable.
 - **Identité visuelle animée** : préchargement, transitions au défilement, Pyreflies en WebGL, curseur lumineux et éclairage du nom dans le footer.
-- **Adaptation aux usages** : navigation mobile, commandes au clavier dans la modale et prise en compte de `prefers-reduced-motion`.
+- **Adaptation aux usages** : navigation mobile, commandes au clavier (carrousel des captures, navigation) et prise en compte de `prefers-reduced-motion`.
 
 ## Aperçus
 
@@ -25,7 +25,7 @@ Captures réalisées sur la version de production du portfolio. Les fichiers Web
 </details>
 
 <details>
-<summary>Réalisations — ordinateur</summary>
+<summary>Projets — ordinateur</summary>
 
 ![Les projets Aria, Monster Triad et Dog Stories K9 mis en avant](docs/screenshots/projets-desktop.webp)
 
@@ -78,20 +78,27 @@ Sur macOS ou Linux, utiliser `pnpm` à la place de `pnpm.cmd`.
 | `pnpm run build` | Générer la version de production               |
 | `pnpm run start` | Servir la version de production après le build |
 
+## Langues (français / anglais)
+
+Le site est disponible en français (`/fr`, langue par défaut) et en anglais (`/en`). Le proxy ([proxy.ts](proxy.ts)) redirige les URL sans préfixe vers la langue mémorisée (cookie `NEXT_LOCALE`) ou, à défaut, celle du navigateur. Le sélecteur FR / EN de la navbar renvoie vers la même page dans l'autre langue. Chaque page déclare sa canonique et ses `hreflang`, et [app/sitemap.ts](app/sitemap.ts) relie les traductions.
+
+Tous les textes sont dans les dictionnaires [i18n/dictionaries/fr.ts](i18n/dictionaries/fr.ts) (référence) et [i18n/dictionaries/en.ts](i18n/dictionaries/en.ts) : le compilateur refuse un dictionnaire dont la forme diffère. Pour ajouter une langue, créer un dictionnaire, l'ajouter à [i18n/config.ts](i18n/config.ts) et [i18n/dictionaries.ts](i18n/dictionaries.ts).
+
 ## Personnaliser le contenu
+
+Les textes (titres, descriptions, parcours, projets…) se modifient dans les dictionnaires ci-dessus. Les fichiers ci-dessous portent la structure et les données qui ne dépendent pas de la langue.
 
 | Contenu                                | Fichier                                                                  |
 | -------------------------------------- | ------------------------------------------------------------------------ |
-| Présentation et portrait d'accueil     | [components/Hero/index.tsx](components/Hero/index.tsx)                   |
-| Services, descriptions et technologies | [components/MyServices/services.tsx](components/MyServices/services.tsx) |
-| Projets, images et ordre d'affichage   | [components/MyProjects/projects.ts](components/MyProjects/projects.ts)   |
-| Expériences et formations              | [components/MyJourney/journey.ts](components/MyJourney/journey.ts)       |
-| Texte de présentation                  | [components/About/about.tsx](components/About/about.tsx)                 |
+| Textes du site, dans chaque langue     | [i18n/dictionaries](i18n/dictionaries)                                   |
+| Services : icônes, technologies, mise en page | [components/MyServices/services.tsx](components/MyServices/services.tsx) |
+| Projets : images, technologies, ordre d'affichage | [components/MyProjects/projects.ts](components/MyProjects/projects.ts) |
+| Chiffres clés de la section À propos   | [components/About/about.tsx](components/About/about.tsx)                 |
 | E-mail, réseaux et lien du CV          | [components/Contact/contact.ts](components/Contact/contact.ts)           |
 | Couleurs et styles globaux             | [app/globals.css](app/globals.css)                                       |
-| Métadonnées et composition globale     | [app/layout.tsx](app/layout.tsx)                                         |
+| Métadonnées et composition globale     | [app/[lang]/layout.tsx](app/[lang]/layout.tsx)                           |
 
-Les visuels des projets se trouvent dans [public/images/projects](public/images/projects). Les trois premières entrées du tableau `PROJECTS` sont affichées sur la page ; la modale reprend la liste complète. Chaque projet peut fournir une image, un cadrage `imagePosition`, des technologies et un lien. Sans image, la carte affiche « Aperçu à venir ».
+Les visuels des projets se trouvent dans [public/images/projects](public/images/projects). Les trois premières entrées de `PROJECT_BASES` sont affichées sur l'accueil ; la page `/projets` reprend la liste complète. Chaque projet peut fournir une image, un cadrage `imagePosition`, des technologies et un lien. Sans image, la carte affiche « Aperçu à venir ».
 
 Les composants des effets visuels sont [pyreflies-background.tsx](components/pyreflies-background.tsx) et [lifestream-cursor.tsx](components/lifestream-cursor.tsx). Leur coordination se trouve dans [lib](lib).
 

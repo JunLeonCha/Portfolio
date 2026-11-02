@@ -5,6 +5,7 @@ import Image from "next/image";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
+import type { Dictionary } from "@/i18n/dictionaries";
 import { onPreloaderLanded } from "@/components/Preloader";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import {
@@ -42,7 +43,7 @@ function LiveDot() {
   );
 }
 
-export default function Hero() {
+export default function Hero({ dict }: { dict: Dictionary["hero"] }) {
   const root = useRef<HTMLElement>(null);
 
   useScrollReveal(root, (tl) => {
@@ -68,6 +69,7 @@ export default function Hero() {
   // rembobiné quand on quitte le Hero, rejoué quand on y revient.
   useGSAP(
     () => {
+      if (!root.current) return;
       const mm = gsap.matchMedia();
       mm.add("(prefers-reduced-motion: no-preference)", () => {
         let trigger: ScrollTrigger | undefined;
@@ -121,7 +123,7 @@ export default function Hero() {
           className="inline-flex items-center gap-3 rounded-full border border-border/50 bg-surface/30 px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground backdrop-blur-xl"
         >
           <LiveDot />
-          Développeur Fullstack · Nantes
+          {dict.badge}
         </p>
 
         <h1 id="hero-title" data-hero="name" className={`mt-8 ${NAME_CLASS}`}>
@@ -135,9 +137,7 @@ export default function Hero() {
           data-hero="text"
           className="mt-6 max-w-xl leading-relaxed text-muted-foreground xl:text-lg"
         >
-          De l&apos;interface à la logique métier, je construis des applications
-          web où les choix techniques servent avant tout le produit et ceux qui
-          l&apos;utilisent.
+          {dict.intro}
         </p>
 
         <div className="mt-10 flex flex-wrap gap-4">
@@ -146,7 +146,7 @@ export default function Hero() {
             data-hero="cta"
             className="group inline-flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-primary-foreground shadow-[0_0_16px] shadow-primary/25 transition-[background-color,box-shadow] duration-300 hover:bg-primary-hover hover:shadow-[0_0_30px] hover:shadow-primary/50 focus-visible:shadow-[0_0_30px] focus-visible:shadow-primary/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none"
           >
-            Voir mes réalisations
+            {dict.ctaProjects}
             <ArrowIcon className="transition-transform duration-300 group-hover:translate-x-1 motion-reduce:transition-none" />
           </a>
           <a
@@ -154,7 +154,7 @@ export default function Hero() {
             data-hero="cta"
             className="inline-flex items-center rounded-full border border-primary/50 bg-secondary px-6 py-4 text-secondary-foreground shadow-[0_0_16px] shadow-primary/15 transition-[background-color,box-shadow] duration-300 hover:bg-secondary-hover hover:shadow-[0_0_30px] hover:shadow-primary/35 focus-visible:shadow-[0_0_30px] focus-visible:shadow-primary/35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none"
           >
-            Me contacter
+            {dict.ctaContact}
           </a>
         </div>
       </div>
@@ -166,7 +166,7 @@ export default function Hero() {
         >
           <Image
             src="/mon-profil.jpg"
-            alt="Portrait de Léon Cha"
+            alt={dict.portraitAlt}
             fill
             preload
             sizes="(min-width: 1280px) 30rem, 90vw"

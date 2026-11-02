@@ -1,13 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
+import { format, type Locale } from "@/i18n/config";
+import type { Dictionary } from "@/i18n/dictionaries";
 import { projectHref, type Project } from "./projects";
 
 export function ProjectMedia({
   project,
+  dict,
   sizes,
   eager = false,
 }: {
   project: Project;
+  dict: Dictionary["projects"];
   sizes: string;
   /** Capture visible dès l'arrivée sur la page : chargée tout de suite plutôt que paresseusement. */
   eager?: boolean;
@@ -20,7 +24,7 @@ export function ProjectMedia({
       {project.image ? (
         <Image
           src={project.image}
-          alt={`Capture du projet ${project.title}`}
+          alt={format(dict.imageAlt, { title: project.title })}
           fill
           loading={eager ? "eager" : "lazy"}
           sizes={sizes}
@@ -29,7 +33,7 @@ export function ProjectMedia({
         />
       ) : (
         <div className="grid h-full place-items-center font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground/60">
-          Aperçu à venir
+          {project.noImageLabel ?? dict.comingSoon}
         </div>
       )}
     </div>
@@ -38,11 +42,15 @@ export function ProjectMedia({
 
 export function ProjectCard({
   project,
+  lang,
+  dict,
   featured = false,
   inGrid = false,
   eager = false,
 }: {
   project: Project;
+  lang: Locale;
+  dict: Dictionary["projects"];
   featured?: boolean;
   /** Carte visible dès l'arrivée sur la page : sa capture est chargée tout de suite. */
   eager?: boolean;
@@ -56,6 +64,7 @@ export function ProjectCard({
     >
       <ProjectMedia
         project={project}
+        dict={dict}
         eager={eager}
         sizes={
           inGrid
@@ -79,7 +88,7 @@ export function ProjectCard({
 
         {project.tags && project.tags.length > 0 && (
           <ul
-            aria-label={`Technologies utilisées pour ${project.title}`}
+            aria-label={format(dict.techFor, { title: project.title })}
             className="mt-5 flex flex-wrap gap-2"
           >
             {project.tags.map((tag, i) => (
@@ -94,11 +103,11 @@ export function ProjectCard({
         )}
 
         <Link
-          href={projectHref(project)}
+          href={projectHref(lang, project)}
           // Lien étiré : toute la carte est cliquable, sans imbriquer de liens.
           className={`inline-flex items-center gap-1.5 text-sm text-primary transition-colors duration-300 group-hover:text-primary-hover focus-visible:outline-none after:absolute after:inset-0 after:rounded-3xl motion-reduce:transition-none ${featured ? "mt-8" : "mt-5"}`}
         >
-          Voir le projet
+          {dict.viewProject}
           <span className="sr-only">{project.title}</span>
         </Link>
       </div>

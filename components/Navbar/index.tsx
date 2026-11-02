@@ -5,9 +5,15 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { onPreloaderDone } from "@/components/Preloader";
-import { NAV_LINKS as LINKS } from "./links";
+import {
+  LOCALES,
+  LOCALE_COOKIE,
+  type Locale,
+} from "@/i18n/config";
+import type { Dictionary } from "@/i18n/dictionaries";
+import { getNavLinks } from "./links";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -63,7 +69,79 @@ function WaveLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-export default function Navbar() {
+/** Mémorise le choix de langue dans un cookie, lu par le proxy aux visites suivantes. */
+function rememberLocale(code: Locale) {
+  document.cookie = `${LOCALE_COOKIE}=${code}; path=/; max-age=31536000; samesite=lax`;
+}
+
+/**
+ * Sélecteur de langue : de vrais liens vers la même page dans chaque langue (utiles aux moteurs
+ * de recherche et sans JavaScript), interceptés pour naviguer côté client et mémoriser le choix.
+ */
+function LanguageSwitcher({
+  lang,
+  dict,
+}: {
+  lang: Locale;
+  dict: Dictionary["nav"];
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  // « /fr/projets/aria » → « /projets/aria »
+  const rest = pathname.replace(/^\/[^/]+/, "");
+
+  // L'autre langue est préchargée dès l'affichage : le changement est alors instantané.
+  useEffect(() => {
+    for (const code of LOCALES) {
+      if (code !== lang) router.prefetch(`/${code}${rest}`);
+    }
+  }, [lang, rest, router]);
+  return (
+    <ul
+      aria-label={dict.languageLabel}
+      className="flex items-center rounded-full border border-border/50 bg-surface/30 p-0.5 font-mono text-[0.7rem] uppercase tracking-[0.15em]"
+    >
+      {LOCALES.map((code) => {
+        const active = code === lang;
+        const href = `/${code}${rest}`;
+        return (
+          <li key={code}>
+            <a
+              href={href}
+              lang={code}
+              hrefLang={code}
+              aria-label={dict.languages[code]}
+              aria-current={active ? "true" : undefined}
+              onClick={(event) => {
+                // Navigation client (pas de rechargement) ; l'ancre en cours est conservée.
+                event.preventDefault();
+                if (active) return;
+                rememberLocale(code);
+                router.push(`${href}${window.location.hash}`, { scroll: false });
+              }}
+              className={`grid h-9 min-w-9 place-items-center rounded-full border px-2.5 transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-ring motion-reduce:transition-none ${
+                active
+                  ? "border-border bg-surface-elevated text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {code}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export default function Navbar({
+  dict,
+  lang,
+}: {
+  dict: Dictionary["nav"];
+  lang: Locale;
+}) {
+  const LINKS = getNavLinks(lang, dict);
   const header = useRef<HTMLElement>(null);
   const nav = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
@@ -190,7 +268,7 @@ export default function Navbar() {
             : "invisible [clip-path:circle(0%_at_calc(100%-2.4rem)_2.4rem)]"
         }`}
       >
-        <nav aria-label="Menu mobile">
+        <nav aria-label={dict.mobileNav}>
           <ul className="flex flex-col">
             {LINKS.map((link, i) => {
               const delay = {
@@ -231,13 +309,13 @@ export default function Navbar() {
       >
         <nav
           ref={nav}
-          aria-label="Navigation principale"
+          aria-label={dict.mainNav}
           data-scrolled="false"
           className="relative z-10 flex items-center justify-between gap-4 rounded-full border border-border/50 bg-surface/30 py-2 pr-2 pl-6 backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-500 data-[scrolled=true]:border-border data-[scrolled=true]:bg-surface/75 data-[scrolled=true]:shadow-[0_8px_32px] data-[scrolled=true]:shadow-black/40 motion-reduce:transition-none"
         >
           <Link
-            href="/"
-            aria-label="Léon Cha, retour à l'accueil"
+            href={`/${lang}`}
+            aria-label={dict.homeLabel}
             onClick={() => setOpen(false)}
             className="rounded-full text-lg leading-none tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
           >
@@ -257,12 +335,14 @@ export default function Navbar() {
             ))}
           </ul>
 
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher lang={lang} dict={dict} />
           {/* Mobile : deux traits qui se croisent en X */}
           <button
             type="button"
             aria-expanded={open}
             aria-controls="mobile-menu"
-            aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
+            aria-label={open ? dict.closeMenu : dict.openMenu}
             onClick={() => setOpen((v) => !v)}
             className="relative grid size-11 cursor-pointer place-items-center rounded-full border border-border bg-secondary transition-colors duration-300 hover:bg-secondary-hover focus-visible:outline-2 focus-visible:outline-ring motion-reduce:transition-none md:hidden"
           >
@@ -275,6 +355,7 @@ export default function Navbar() {
               className={`absolute h-px w-5 bg-foreground transition-transform duration-500 ease-[cubic-bezier(.7,0,.2,1)] motion-reduce:transition-none ${open ? "-rotate-45" : "translate-y-[3.5px]"}`}
             />
           </button>
+          </div>
         </nav>
       </header>
     </>
