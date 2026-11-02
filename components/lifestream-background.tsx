@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
+import { takeWarmedProgram, warmPrograms } from "@/lib/gl-programs";
 
 /**
  * Courant de vie : courants de filaments tressés, entourés de spores, qui traversent l'écran en
@@ -409,6 +410,8 @@ function compile(gl: WebGLRenderingContext, type: number, src: string) {
 }
 
 function link(gl: WebGLRenderingContext, vs: string, fs: string) {
+  const warmed = takeWarmedProgram(gl, vs, fs, "Lifestream");
+  if (warmed !== undefined) return warmed;
   const v = compile(gl, gl.VERTEX_SHADER, vs);
   const f = compile(gl, gl.FRAGMENT_SHADER, fs);
   if (!v || !f) return null;
@@ -425,6 +428,16 @@ function link(gl: WebGLRenderingContext, vs: string, fs: string) {
   }
   return p;
 }
+
+const GL_OPTIONS: WebGLContextAttributes = {
+  alpha: false,
+  antialias: false,
+  depth: false,
+  stencil: false,
+  premultipliedAlpha: false,
+  powerPreference: "high-performance",
+  preserveDrawingBuffer: false,
+};
 
 export type LifestreamBackgroundProps = {
   color?: string;
@@ -519,404 +532,429 @@ export default function LifestreamBackground({
     const canvas = canvasElement;
     const doc = canvas.ownerDocument;
     const view = doc.defaultView ?? window;
-    const glCtx = canvas.getContext("webgl", {
-      alpha: false,
-      antialias: false,
-      depth: false,
-      stencil: false,
-      premultipliedAlpha: false,
-      powerPreference: "high-performance",
-      preserveDrawingBuffer: false,
-    });
-    if (!glCtx) return; // pas de WebGL : le fond CSS reste, sans courant
-    const gl = glCtx;
+    // Les shaders se compilent en parallèle, sans bloquer le thread : le rendu démarre ensuite.
+    const warmGl = canvas.getContext("webgl", GL_OPTIONS);
+    if (!warmGl) return;
+    let cancelled = false;
+    let teardown: (() => void) | undefined;
+    const setup = (): (() => void) | undefined => {
+      const glCtx = canvas.getContext("webgl", GL_OPTIONS);
+      if (!glCtx) return; // pas de WebGL : le fond CSS reste, sans courant
+      const gl = glCtx;
 
-    // ---------- Réglages normalisés ----------
-    const streamCount = Math.round(clamp(count, 1, MAX_STREAMS));
-    const strandCount = Math.round(clamp(strands, 1, 4));
-    const threadCount = 2 + Math.round(clamp(fibers, 0, 8));
-    const amplitude = clamp(width, 8, 80);
-    const pace = clamp(speed, 0.1, 3);
-    const headCount = Math.round(clamp(trails, 1, MAX_HEADS));
-    const tailK = 1 / clamp(trailLength, 0.3, 2.5);
-    const introLen = clamp(introDuration, 0.5, 6);
-    const fpsCap = clamp(maxFps, 24, 120);
-    const maxRatio = clamp(resolution, 0.75, 2);
-    const reach = clamp(radius, 40, 400);
-    const wakeK = clamp(wake, 0, 1.5);
-    const primary = parseColor(color, "#48ffa5");
-    const secondary = parseColor(secondaryColor, "#00bfa5");
-    const bg = overlay
-      ? { r: 0, g: 0, b: 0 }
-      : parseColor(background, "#010302"); // en mode écran, le noir est neutre
-    const core = mix(primary, { r: 1, g: 1, b: 1 }, 0.7);
-    const reducedMotion = view.matchMedia("(prefers-reduced-motion: reduce)");
+      // ---------- Réglages normalisés ----------
+      const streamCount = Math.round(clamp(count, 1, MAX_STREAMS));
+      const strandCount = Math.round(clamp(strands, 1, 4));
+      const threadCount = 2 + Math.round(clamp(fibers, 0, 8));
+      const amplitude = clamp(width, 8, 80);
+      const pace = clamp(speed, 0.1, 3);
+      const headCount = Math.round(clamp(trails, 1, MAX_HEADS));
+      const tailK = 1 / clamp(trailLength, 0.3, 2.5);
+      const introLen = clamp(introDuration, 0.5, 6);
+      // Écran tactile ou étroit : moins de pixels et une cadence plafonnée (cf. Pyreflies).
+      const compact = view.matchMedia(
+        "(pointer: coarse), (max-width: 767px)",
+      ).matches;
+      const fpsCap = clamp(compact ? Math.min(maxFps, 30) : maxFps, 24, 120);
+      const maxRatio = clamp(
+        compact ? Math.min(resolution, 1) : resolution,
+        0.75,
+        2,
+      );
+      const reach = clamp(radius, 40, 400);
+      const wakeK = clamp(wake, 0, 1.5);
+      const primary = parseColor(color, "#48ffa5");
+      const secondary = parseColor(secondaryColor, "#00bfa5");
+      const bg = overlay
+        ? { r: 0, g: 0, b: 0 }
+        : parseColor(background, "#010302"); // en mode écran, le noir est neutre
+      const core = mix(primary, { r: 1, g: 1, b: 1 }, 0.7);
+      const reducedMotion = view.matchMedia("(prefers-reduced-motion: reduce)");
 
-    // ---------- Courants : répartis sur la hauteur, chacun sa personnalité ----------
-    const random = mulberry32(
-      seed > 0
-        ? Math.round(seed) * 9301 + 49297
-        : Math.floor(Math.random() * 4294967296),
-    );
-    const streams: Stream[] = Array.from({ length: streamCount }, (_, i) => {
-      const t = streamCount === 1 ? 0.5 : i / (streamCount - 1);
-      const main = clamp(1 - Math.abs(t - 0.5) * 1.6, 0, 1); // les courants centraux dominent
-      return {
-        y: lerp(0.3, 0.72, t) + (random() - 0.5) * 0.06,
-        amp: 0.1 + random() * 0.11,
-        spread: amplitude * (0.5 + 0.6 * main + random() * 0.25),
-        seed: random() * 10,
-        alpha: 0.5 + 0.5 * main,
-        thick: 0.9 + 0.4 * main,
-        heads: Math.max(1, headCount - (main < 0.4 ? 1 : 0)),
-        speed: (0.08 + random() * 0.06) * pace,
-        tail: (2.2 + random()) * tailK,
-        strands: Math.max(1, strandCount - (main < 0.4 ? 1 : 0)),
-      };
-    });
+      // ---------- Courants : répartis sur la hauteur, chacun sa personnalité ----------
+      const random = mulberry32(
+        seed > 0
+          ? Math.round(seed) * 9301 + 49297
+          : Math.floor(Math.random() * 4294967296),
+      );
+      const streams: Stream[] = Array.from({ length: streamCount }, (_, i) => {
+        const t = streamCount === 1 ? 0.5 : i / (streamCount - 1);
+        const main = clamp(1 - Math.abs(t - 0.5) * 1.6, 0, 1); // les courants centraux dominent
+        return {
+          y: lerp(0.3, 0.72, t) + (random() - 0.5) * 0.06,
+          amp: 0.1 + random() * 0.11,
+          spread: amplitude * (0.5 + 0.6 * main + random() * 0.25),
+          seed: random() * 10,
+          alpha: 0.5 + 0.5 * main,
+          thick: 0.9 + 0.4 * main,
+          heads: Math.max(1, headCount - (main < 0.4 ? 1 : 0)),
+          speed: (0.08 + random() * 0.06) * pace,
+          tail: (2.2 + random()) * tailK,
+          strands: Math.max(1, strandCount - (main < 0.4 ? 1 : 0)),
+        };
+      });
 
-    // ---------- Programmes ----------
-    const strandProg = link(gl, STRAND_VS, STRAND_FS);
-    const sporeProg = link(gl, SPORE_VS, SPORE_FS);
-    if (!strandProg || !sporeProg) return;
+      // ---------- Programmes ----------
+      const strandProg = link(gl, STRAND_VS, STRAND_FS);
+      const sporeProg = link(gl, SPORE_VS, SPORE_FS);
+      if (!strandProg || !sporeProg) return;
 
-    // ---------- Géométrie statique : générée une fois, jamais retouchée ----------
-    // Filaments : pour chaque (courant, brin, fil), un ruban de SEGMENTS × 2 sommets.
-    const data: number[] = [];
-    const streamIdx: number[] = [];
-    const indices: number[] = [];
-    let vtx = 0;
-    streams.forEach((S, si) => {
-      for (let k = 0; k < S.strands; k++) {
-        for (let th = 0; th < threadCount; th++) {
-          for (let j = 0; j < SEGMENTS; j++) {
-            const u = j / (SEGMENTS - 1);
-            data.push(u, -1, k, th, u, 1, k, th);
-            streamIdx.push(si, si);
-            if (j < SEGMENTS - 1) {
-              const a = vtx + j * 2;
-              indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      // ---------- Géométrie statique : générée une fois, jamais retouchée ----------
+      // Filaments : pour chaque (courant, brin, fil), un ruban de SEGMENTS × 2 sommets.
+      const data: number[] = [];
+      const streamIdx: number[] = [];
+      const indices: number[] = [];
+      let vtx = 0;
+      streams.forEach((S, si) => {
+        for (let k = 0; k < S.strands; k++) {
+          for (let th = 0; th < threadCount; th++) {
+            for (let j = 0; j < SEGMENTS; j++) {
+              const u = j / (SEGMENTS - 1);
+              data.push(u, -1, k, th, u, 1, k, th);
+              streamIdx.push(si, si);
+              if (j < SEGMENTS - 1) {
+                const a = vtx + j * 2;
+                indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+              }
             }
+            vtx += SEGMENTS * 2;
           }
-          vtx += SEGMENTS * 2;
+        }
+      });
+      const strandData = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, strandData);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+      const strandStream = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, strandStream);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(streamIdx),
+        gl.STATIC_DRAW,
+      );
+      const strandIndex = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, strandIndex);
+      gl.bufferData(
+        gl.ELEMENT_ARRAY_BUFFER,
+        new Uint16Array(indices),
+        gl.STATIC_DRAW,
+      );
+      const strandIndexCount = indices.length;
+
+      // Spores : réparties sur les courants, plus nombreuses sur les plus présents.
+      const sporeTotal = Math.round(clamp(particles, 0, 240));
+      const sporeData = new Float32Array(sporeTotal * 4);
+      const weightSum = streams.reduce((a, S) => a + S.alpha, 0);
+      for (let n = 0; n < sporeTotal; n++) {
+        let pick = random() * weightSum;
+        let si = 0;
+        while (si < streams.length - 1 && (pick -= streams[si].alpha) > 0) si++;
+        sporeData.set(
+          [si, random(), (random() - 0.5) * 2, random() * 100],
+          n * 4,
+        );
+      }
+      const sporeBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, sporeBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, sporeData, gl.STATIC_DRAW);
+
+      // ---------- Uniformes fixes ----------
+      const s0 = new Float32Array(MAX_STREAMS * 4);
+      const s1 = new Float32Array(MAX_STREAMS * 4);
+      const s2 = new Float32Array(MAX_STREAMS * 4);
+      streams.forEach((S, i) => {
+        s0.set([S.y, S.amp, S.spread, S.seed], i * 4);
+        s1.set([S.alpha, S.thick, S.heads, S.speed], i * 4);
+        s2.set([S.tail, S.strands, 0, 0], i * 4);
+      });
+      const locsOf = (p: WebGLProgram) =>
+        Object.fromEntries(
+          UNIFORMS.map((n) => [n, gl.getUniformLocation(p, n)]),
+        ) as Record<string, WebGLUniformLocation | null>;
+      const L = locsOf(strandProg);
+      const LS = locsOf(sporeProg);
+      for (const [prog, locs] of [
+        [strandProg, L],
+        [sporeProg, LS],
+      ] as const) {
+        gl.useProgram(prog);
+        gl.uniform4fv(locs.u_s0, s0);
+        gl.uniform4fv(locs.u_s1, s1);
+        gl.uniform4fv(locs.u_s2, s2);
+        gl.uniform1f(locs.u_sway, clamp(spread, 0, 2));
+        gl.uniform1f(locs.u_drift, clamp(flow, 0, 3));
+        gl.uniform2f(locs.u_pull, clamp(attraction, 0, 1), reach);
+        gl.uniform1f(locs.u_alpha, clamp(intensity, 0, 1.5));
+        gl.uniform1f(locs.u_glow, clamp(glow, 0, 3));
+        gl.uniform3f(locs.u_primary, primary.r, primary.g, primary.b);
+        gl.uniform3f(locs.u_secondary, secondary.r, secondary.g, secondary.b);
+        gl.uniform3f(locs.u_core, core.r, core.g, core.b);
+      }
+      const aData = gl.getAttribLocation(strandProg, "a_data");
+      const aStream = gl.getAttribLocation(strandProg, "a_stream");
+      const aSpore = gl.getAttribLocation(sporeProg, "a_spore");
+
+      gl.disable(gl.DEPTH_TEST);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE); // lumière additive : les croisements s'illuminent
+      gl.clearColor(bg.r, bg.g, bg.b, 1);
+
+      // ---------- État ----------
+      let w = 1;
+      let h = 1;
+      let frame = 0;
+      let previousTime = 0;
+      let startTime = -1;
+      let visible = true;
+      let rect = { left: 0, top: 0 };
+      // Pointeur : cible brute, position lissée, sillage amorti et présence en fondu.
+      // La position n'est jamais téléportée : quand il sort, il garde sa place pendant que sa présence s'éteint.
+      const pointer = {
+        tx: 0,
+        ty: 0,
+        x: 0,
+        y: 0,
+        wx: 0,
+        wy: 0,
+        k: 0,
+        inside: false,
+        seeded: false,
+      };
+
+      function resize() {
+        const box = root.getBoundingClientRect();
+        rect = { left: box.left, top: box.top };
+        w = Math.max(1, box.width);
+        h = Math.max(1, box.height);
+        const ratio = Math.min(view.devicePixelRatio || 1, maxRatio);
+        canvas.width = Math.max(1, Math.round(w * ratio));
+        canvas.height = Math.max(1, Math.round(h * ratio));
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(sporeProg);
+        gl.uniform1f(LS.u_dpr, ratio);
+      }
+
+      function render(ts: number, reveal: number, leave = 0) {
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        if (reveal <= 0 || leave >= 1) return;
+
+        // Filaments : lueur large puis cœur fin, deux appels pour toute la scène.
+        gl.useProgram(strandProg);
+        gl.uniform2f(L.u_res, w, h);
+        gl.uniform1f(L.u_time, ts);
+        gl.uniform1f(L.u_reveal, reveal);
+        gl.uniform1f(L.u_exit, leave);
+        gl.uniform3f(L.u_pointer, pointer.x, pointer.y, pointer.k);
+        gl.uniform2f(L.u_pvel, pointer.wx, pointer.wy);
+        gl.bindBuffer(gl.ARRAY_BUFFER, strandData);
+        gl.enableVertexAttribArray(aData);
+        gl.vertexAttribPointer(aData, 4, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, strandStream);
+        gl.enableVertexAttribArray(aStream);
+        gl.vertexAttribPointer(aStream, 1, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, strandIndex);
+        for (const pass of [0, 1]) {
+          gl.uniform1f(L.u_pass, pass);
+          gl.drawElements(gl.TRIANGLES, strandIndexCount, gl.UNSIGNED_SHORT, 0);
+        }
+        gl.disableVertexAttribArray(aData);
+        gl.disableVertexAttribArray(aStream);
+
+        // Spores : un seul appel pour toutes.
+        if (sporeTotal > 0) {
+          gl.useProgram(sporeProg);
+          gl.uniform2f(LS.u_res, w, h);
+          gl.uniform1f(LS.u_time, ts);
+          gl.uniform1f(LS.u_reveal, reveal);
+          gl.uniform1f(LS.u_exit, leave);
+          gl.uniform3f(LS.u_pointer, pointer.x, pointer.y, pointer.k);
+          gl.uniform2f(LS.u_pvel, pointer.wx, pointer.wy);
+          gl.bindBuffer(gl.ARRAY_BUFFER, sporeBuf);
+          gl.enableVertexAttribArray(aSpore);
+          gl.vertexAttribPointer(aSpore, 4, gl.FLOAT, false, 0, 0);
+          gl.drawArrays(gl.POINTS, 0, sporeTotal);
+          gl.disableVertexAttribArray(aSpore);
         }
       }
-    });
-    const strandData = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, strandData);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
-    const strandStream = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, strandStream);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(streamIdx), gl.STATIC_DRAW);
-    const strandIndex = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, strandIndex);
-    gl.bufferData(
-      gl.ELEMENT_ARRAY_BUFFER,
-      new Uint16Array(indices),
-      gl.STATIC_DRAW,
-    );
-    const strandIndexCount = indices.length;
 
-    // Spores : réparties sur les courants, plus nombreuses sur les plus présents.
-    const sporeTotal = Math.round(clamp(particles, 0, 240));
-    const sporeData = new Float32Array(sporeTotal * 4);
-    const weightSum = streams.reduce((a, S) => a + S.alpha, 0);
-    for (let n = 0; n < sporeTotal; n++) {
-      let pick = random() * weightSum;
-      let si = 0;
-      while (si < streams.length - 1 && (pick -= streams[si].alpha) > 0) si++;
-      sporeData.set(
-        [si, random(), (random() - 0.5) * 2, random() * 100],
-        n * 4,
-      );
-    }
-    const sporeBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, sporeBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, sporeData, gl.STATIC_DRAW);
-
-    // ---------- Uniformes fixes ----------
-    const s0 = new Float32Array(MAX_STREAMS * 4);
-    const s1 = new Float32Array(MAX_STREAMS * 4);
-    const s2 = new Float32Array(MAX_STREAMS * 4);
-    streams.forEach((S, i) => {
-      s0.set([S.y, S.amp, S.spread, S.seed], i * 4);
-      s1.set([S.alpha, S.thick, S.heads, S.speed], i * 4);
-      s2.set([S.tail, S.strands, 0, 0], i * 4);
-    });
-    const locsOf = (p: WebGLProgram) =>
-      Object.fromEntries(
-        UNIFORMS.map((n) => [n, gl.getUniformLocation(p, n)]),
-      ) as Record<string, WebGLUniformLocation | null>;
-    const L = locsOf(strandProg);
-    const LS = locsOf(sporeProg);
-    for (const [prog, locs] of [
-      [strandProg, L],
-      [sporeProg, LS],
-    ] as const) {
-      gl.useProgram(prog);
-      gl.uniform4fv(locs.u_s0, s0);
-      gl.uniform4fv(locs.u_s1, s1);
-      gl.uniform4fv(locs.u_s2, s2);
-      gl.uniform1f(locs.u_sway, clamp(spread, 0, 2));
-      gl.uniform1f(locs.u_drift, clamp(flow, 0, 3));
-      gl.uniform2f(locs.u_pull, clamp(attraction, 0, 1), reach);
-      gl.uniform1f(locs.u_alpha, clamp(intensity, 0, 1.5));
-      gl.uniform1f(locs.u_glow, clamp(glow, 0, 3));
-      gl.uniform3f(locs.u_primary, primary.r, primary.g, primary.b);
-      gl.uniform3f(locs.u_secondary, secondary.r, secondary.g, secondary.b);
-      gl.uniform3f(locs.u_core, core.r, core.g, core.b);
-    }
-    const aData = gl.getAttribLocation(strandProg, "a_data");
-    const aStream = gl.getAttribLocation(strandProg, "a_stream");
-    const aSpore = gl.getAttribLocation(sporeProg, "a_spore");
-
-    gl.disable(gl.DEPTH_TEST);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE); // lumière additive : les croisements s'illuminent
-    gl.clearColor(bg.r, bg.g, bg.b, 1);
-
-    // ---------- État ----------
-    let w = 1;
-    let h = 1;
-    let frame = 0;
-    let previousTime = 0;
-    let startTime = -1;
-    let visible = true;
-    let rect = { left: 0, top: 0 };
-    // Pointeur : cible brute, position lissée, sillage amorti et présence en fondu.
-    // La position n'est jamais téléportée : quand il sort, il garde sa place pendant que sa présence s'éteint.
-    const pointer = {
-      tx: 0,
-      ty: 0,
-      x: 0,
-      y: 0,
-      wx: 0,
-      wy: 0,
-      k: 0,
-      inside: false,
-      seeded: false,
-    };
-
-    function resize() {
-      const box = root.getBoundingClientRect();
-      rect = { left: box.left, top: box.top };
-      w = Math.max(1, box.width);
-      h = Math.max(1, box.height);
-      const ratio = Math.min(view.devicePixelRatio || 1, maxRatio);
-      canvas.width = Math.max(1, Math.round(w * ratio));
-      canvas.height = Math.max(1, Math.round(h * ratio));
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.useProgram(sporeProg);
-      gl.uniform1f(LS.u_dpr, ratio);
-    }
-
-    function render(ts: number, reveal: number, leave = 0) {
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      if (reveal <= 0 || leave >= 1) return;
-
-      // Filaments : lueur large puis cœur fin, deux appels pour toute la scène.
-      gl.useProgram(strandProg);
-      gl.uniform2f(L.u_res, w, h);
-      gl.uniform1f(L.u_time, ts);
-      gl.uniform1f(L.u_reveal, reveal);
-      gl.uniform1f(L.u_exit, leave);
-      gl.uniform3f(L.u_pointer, pointer.x, pointer.y, pointer.k);
-      gl.uniform2f(L.u_pvel, pointer.wx, pointer.wy);
-      gl.bindBuffer(gl.ARRAY_BUFFER, strandData);
-      gl.enableVertexAttribArray(aData);
-      gl.vertexAttribPointer(aData, 4, gl.FLOAT, false, 0, 0);
-      gl.bindBuffer(gl.ARRAY_BUFFER, strandStream);
-      gl.enableVertexAttribArray(aStream);
-      gl.vertexAttribPointer(aStream, 1, gl.FLOAT, false, 0, 0);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, strandIndex);
-      for (const pass of [0, 1]) {
-        gl.uniform1f(L.u_pass, pass);
-        gl.drawElements(gl.TRIANGLES, strandIndexCount, gl.UNSIGNED_SHORT, 0);
+      /** Entrée : les courants se déroulent de gauche à droite (ease-out expo, comme un trait qui se pose). */
+      function revealAt(elapsed: number) {
+        if (progress) {
+          // Le front (milieu du fondu) est à x ≈ 0 pour un déroulé de 0,18, et au-delà du bord droit à 1.
+          return 0.18 + 0.82 * clamp(progress.current, 0, 1);
+        }
+        if (!intro) return 1;
+        const p = clamp((elapsed - INTRO_DELAY) / introLen, 0, 1);
+        return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
       }
-      gl.disableVertexAttribArray(aData);
-      gl.disableVertexAttribArray(aStream);
 
-      // Spores : un seul appel pour toutes.
-      if (sporeTotal > 0) {
-        gl.useProgram(sporeProg);
-        gl.uniform2f(LS.u_res, w, h);
-        gl.uniform1f(LS.u_time, ts);
-        gl.uniform1f(LS.u_reveal, reveal);
-        gl.uniform1f(LS.u_exit, leave);
-        gl.uniform3f(LS.u_pointer, pointer.x, pointer.y, pointer.k);
-        gl.uniform2f(LS.u_pvel, pointer.wx, pointer.wy);
-        gl.bindBuffer(gl.ARRAY_BUFFER, sporeBuf);
-        gl.enableVertexAttribArray(aSpore);
-        gl.vertexAttribPointer(aSpore, 4, gl.FLOAT, false, 0, 0);
-        gl.drawArrays(gl.POINTS, 0, sporeTotal);
-        gl.disableVertexAttribArray(aSpore);
+      function dispose() {
+        gl.deleteBuffer(strandData);
+        gl.deleteBuffer(strandStream);
+        gl.deleteBuffer(strandIndex);
+        gl.deleteBuffer(sporeBuf);
+        gl.deleteProgram(strandProg);
+        gl.deleteProgram(sporeProg);
       }
-    }
 
-    /** Entrée : les courants se déroulent de gauche à droite (ease-out expo, comme un trait qui se pose). */
-    function revealAt(elapsed: number) {
-      if (progress) {
-        // Le front (milieu du fondu) est à x ≈ 0 pour un déroulé de 0,18, et au-delà du bord droit à 1.
-        return 0.18 + 0.82 * clamp(progress.current, 0, 1);
+      // ---------- Composition figée : pause ou mouvement réduit ----------
+      if (paused || reducedMotion.matches) {
+        const paint = () => {
+          resize();
+          render(STATIC_TIME, 1);
+        };
+        paint();
+        const observer = new ResizeObserver(paint);
+        observer.observe(root);
+        return () => {
+          observer.disconnect();
+          dispose();
+        };
       }
-      if (!intro) return 1;
-      const p = clamp((elapsed - INTRO_DELAY) / introLen, 0, 1);
-      return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
-    }
 
-    function dispose() {
-      gl.deleteBuffer(strandData);
-      gl.deleteBuffer(strandStream);
-      gl.deleteBuffer(strandIndex);
-      gl.deleteBuffer(sporeBuf);
-      gl.deleteProgram(strandProg);
-      gl.deleteProgram(sporeProg);
-    }
-
-    // ---------- Composition figée : pause ou mouvement réduit ----------
-    if (paused || reducedMotion.matches) {
-      const paint = () => {
-        resize();
-        render(STATIC_TIME, 1);
-      };
-      paint();
-      const observer = new ResizeObserver(paint);
-      observer.observe(root);
-      return () => {
-        observer.disconnect();
-        dispose();
-      };
-    }
-
-    // ---------- Boucle d'animation ----------
-    const minGap = 1000 / fpsCap - 2;
-    // Horloge de l'animation : avance à `tempo` × le temps réel. Accumulée, donc changer la vitesse
-    // ne fait jamais sauter les courants ; l'entrée, elle, garde le temps réel.
-    const tempoK = clamp(tempo, 0.05, 2);
-    let clock = 0;
-    function tick(time: number) {
-      frame = 0;
-      if (!visible || doc.hidden) {
-        previousTime = 0;
-        return;
-      }
-      if (previousTime && time - previousTime < minGap) {
+      // ---------- Boucle d'animation ----------
+      const minGap = 1000 / fpsCap - 2;
+      // Horloge de l'animation : avance à `tempo` × le temps réel. Accumulée, donc changer la vitesse
+      // ne fait jamais sauter les courants ; l'entrée, elle, garde le temps réel.
+      const tempoK = clamp(tempo, 0.05, 2);
+      let clock = 0;
+      function tick(time: number) {
+        frame = 0;
+        if (!visible || doc.hidden) {
+          previousTime = 0;
+          return;
+        }
+        if (previousTime && time - previousTime < minGap) {
+          frame = view.requestAnimationFrame(tick);
+          return;
+        }
+        const dt = previousTime
+          ? Math.min(0.05, (time - previousTime) / 1000)
+          : 1 / 60;
+        previousTime = time;
+        const ts = time / 1000;
+        if (startTime < 0) startTime = ts;
+        updatePointer(dt);
+        clock += dt * tempoK;
+        render(
+          clock,
+          revealAt(ts - startTime),
+          exit ? clamp(exit.current, 0, 1) : 0,
+        );
         frame = view.requestAnimationFrame(tick);
-        return;
       }
-      const dt = previousTime
-        ? Math.min(0.05, (time - previousTime) / 1000)
-        : 1 / 60;
-      previousTime = time;
-      const ts = time / 1000;
-      if (startTime < 0) startTime = ts;
-      updatePointer(dt);
-      clock += dt * tempoK;
-      render(
-        clock,
-        revealAt(ts - startTime),
-        exit ? clamp(exit.current, 0, 1) : 0,
-      );
-      frame = view.requestAnimationFrame(tick);
-    }
-    function kick() {
-      if (!frame && visible && !doc.hidden)
-        frame = view.requestAnimationFrame(tick);
-    }
+      function kick() {
+        if (!frame && visible && !doc.hidden)
+          frame = view.requestAnimationFrame(tick);
+      }
 
-    /** Ressort amorti : le courant suit le geste avec un léger retard, jamais par à-coups. */
-    function updatePointer(dt: number) {
-      const ox = pointer.x;
-      const oy = pointer.y;
-      if (pointer.inside) {
-        const k = 1 - Math.exp(-dt * 7);
-        pointer.x += (pointer.tx - pointer.x) * k;
-        pointer.y += (pointer.ty - pointer.y) * k;
+      /** Ressort amorti : le courant suit le geste avec un léger retard, jamais par à-coups. */
+      function updatePointer(dt: number) {
+        const ox = pointer.x;
+        const oy = pointer.y;
+        if (pointer.inside) {
+          const k = 1 - Math.exp(-dt * 7);
+          pointer.x += (pointer.tx - pointer.x) * k;
+          pointer.y += (pointer.ty - pointer.y) * k;
+        }
+        // Sillage = vitesse lissée × durée courte, plafonné pour rester élégant même sur un geste brusque.
+        const vx = (pointer.x - ox) / dt;
+        const vy = (pointer.y - oy) / dt;
+        const kv = 1 - Math.exp(-dt * 5);
+        const tx = clamp(vx * 0.05 * wakeK, -60, 60);
+        const ty = clamp(vy * 0.05 * wakeK, -60, 60);
+        pointer.wx += (tx - pointer.wx) * kv;
+        pointer.wy += (ty - pointer.wy) * kv;
+        // Présence : apparaît vite, s'efface lentement.
+        pointer.k +=
+          ((pointer.inside ? 1 : 0) - pointer.k) *
+          (1 - Math.exp(-dt * (pointer.inside ? 3.5 : 1.6)));
       }
-      // Sillage = vitesse lissée × durée courte, plafonné pour rester élégant même sur un geste brusque.
-      const vx = (pointer.x - ox) / dt;
-      const vy = (pointer.y - oy) / dt;
-      const kv = 1 - Math.exp(-dt * 5);
-      const tx = clamp(vx * 0.05 * wakeK, -60, 60);
-      const ty = clamp(vy * 0.05 * wakeK, -60, 60);
-      pointer.wx += (tx - pointer.wx) * kv;
-      pointer.wy += (ty - pointer.wy) * kv;
-      // Présence : apparaît vite, s'efface lentement.
-      pointer.k +=
-        ((pointer.inside ? 1 : 0) - pointer.k) *
-        (1 - Math.exp(-dt * (pointer.inside ? 3.5 : 1.6)));
-    }
 
-    // ---------- Événements ----------
-    function onMove(event: PointerEvent) {
-      if (event.pointerType !== "mouse") return;
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      pointer.inside =
-        x > -reach && y > -reach && x < w + reach && y < h + reach;
-      pointer.tx = x;
-      pointer.ty = y;
-      // Première entrée (ou retour après effacement complet) : on se place directement, sans balayage.
-      if (!pointer.seeded || pointer.k < 0.02) {
-        pointer.x = x;
-        pointer.y = y;
-        pointer.wx = pointer.wy = 0;
-        pointer.seeded = true;
+      // ---------- Événements ----------
+      function onMove(event: PointerEvent) {
+        if (event.pointerType !== "mouse") return;
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        pointer.inside =
+          x > -reach && y > -reach && x < w + reach && y < h + reach;
+        pointer.tx = x;
+        pointer.ty = y;
+        // Première entrée (ou retour après effacement complet) : on se place directement, sans balayage.
+        if (!pointer.seeded || pointer.k < 0.02) {
+          pointer.x = x;
+          pointer.y = y;
+          pointer.wx = pointer.wy = 0;
+          pointer.seeded = true;
+        }
       }
-    }
-    function onLeave() {
-      pointer.inside = false;
-    }
-    function onScroll() {
-      const box = root.getBoundingClientRect();
-      rect = { left: box.left, top: box.top };
-    }
-    function onVisibility() {
-      if (doc.hidden) {
+      function onLeave() {
+        pointer.inside = false;
+      }
+      function onScroll() {
+        const box = root.getBoundingClientRect();
+        rect = { left: box.left, top: box.top };
+      }
+      function onVisibility() {
+        if (doc.hidden) {
+          view.cancelAnimationFrame(frame);
+          frame = 0;
+          previousTime = 0;
+        } else kick();
+      }
+      function onLost(event: Event) {
+        event.preventDefault();
         view.cancelAnimationFrame(frame);
         frame = 0;
-        previousTime = 0;
-      } else kick();
-    }
-    function onLost(event: Event) {
-      event.preventDefault();
-      view.cancelAnimationFrame(frame);
-      frame = 0;
-    }
+      }
 
-    resize();
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(root);
-    // Hors écran, le GPU se repose.
-    const io = new IntersectionObserver(
-      (entries) => {
-        visible = entries[0]?.isIntersecting ?? true;
-        if (visible) kick();
-      },
-      { rootMargin: "100px" },
-    );
-    io.observe(root);
-    // Le pointeur est suivi sur toute la fenêtre : le calque lui-même ne capte aucun événement.
-    view.addEventListener("pointermove", onMove, { passive: true });
-    doc.documentElement.addEventListener("pointerleave", onLeave);
-    view.addEventListener("blur", onLeave);
-    view.addEventListener("scroll", onScroll, { passive: true, capture: true });
-    doc.addEventListener("visibilitychange", onVisibility);
-    canvas.addEventListener("webglcontextlost", onLost);
-    kick();
+      resize();
+      const resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(root);
+      // Hors écran, le GPU se repose.
+      const io = new IntersectionObserver(
+        (entries) => {
+          visible = entries[0]?.isIntersecting ?? true;
+          if (visible) kick();
+        },
+        { rootMargin: "100px" },
+      );
+      io.observe(root);
+      // Le pointeur est suivi sur toute la fenêtre : le calque lui-même ne capte aucun événement.
+      view.addEventListener("pointermove", onMove, { passive: true });
+      doc.documentElement.addEventListener("pointerleave", onLeave);
+      view.addEventListener("blur", onLeave);
+      view.addEventListener("scroll", onScroll, {
+        passive: true,
+        capture: true,
+      });
+      doc.addEventListener("visibilitychange", onVisibility);
+      canvas.addEventListener("webglcontextlost", onLost);
+      kick();
 
+      return () => {
+        view.cancelAnimationFrame(frame);
+        frame = 0;
+        resizeObserver.disconnect();
+        io.disconnect();
+        view.removeEventListener("pointermove", onMove);
+        doc.documentElement.removeEventListener("pointerleave", onLeave);
+        view.removeEventListener("blur", onLeave);
+        view.removeEventListener("scroll", onScroll, true);
+        doc.removeEventListener("visibilitychange", onVisibility);
+        canvas.removeEventListener("webglcontextlost", onLost);
+        dispose();
+      };
+    };
+
+    void warmPrograms(warmGl, [
+      [STRAND_VS, STRAND_FS],
+      [SPORE_VS, SPORE_FS],
+    ]).then(() => {
+      if (!cancelled) teardown = setup();
+    });
     return () => {
-      view.cancelAnimationFrame(frame);
-      frame = 0;
-      resizeObserver.disconnect();
-      io.disconnect();
-      view.removeEventListener("pointermove", onMove);
-      doc.documentElement.removeEventListener("pointerleave", onLeave);
-      view.removeEventListener("blur", onLeave);
-      view.removeEventListener("scroll", onScroll, true);
-      doc.removeEventListener("visibilitychange", onVisibility);
-      canvas.removeEventListener("webglcontextlost", onLost);
-      dispose();
+      cancelled = true;
+      teardown?.();
     };
   }, [
     color,

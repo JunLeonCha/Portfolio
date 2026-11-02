@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import { CONTACT_LINKS, EMAIL } from "@/components/Contact/contact";
 import { NAV_LINKS } from "@/components/Navbar/links";
@@ -290,12 +291,12 @@ export default function Footer() {
           <ul className="mt-5 flex flex-col gap-3">
             {NAV_LINKS.map((link) => (
               <li key={link.label}>
-                <a
+                <Link
                   href={link.href}
                   className={`text-sm text-foreground/80 hover:text-foreground ${UNDERLINE}`}
                 >
                   {link.label}
-                </a>
+                </Link>
               </li>
             ))}
           </ul>

@@ -4,6 +4,8 @@ import PyrefliesBackground from "@/components/pyreflies-background";
 import LifestreamCursor from "@/components/lifestream-cursor";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import Preloader from "@/components/Preloader";
+import { GLOW_COLOR, GLOW_SECONDARY_COLOR } from "@/lib/glow-colors";
 
 const TITLE = "Léon CHA";
 const DESCRIPTION =
@@ -54,11 +56,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="fr" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
+        {/* Dans le layout : monté une seule fois par chargement de document, jamais rejoué par la navigation. */}
+        <Preloader />
         <PyrefliesBackground />
         <Navbar />
         {children}
         <Footer />
-        <LifestreamCursor />
+        {/* Violet des ténèbres façon Riku : tête électrique, filament indigo, refus en rose vif. */}
+        <LifestreamCursor
+          color={GLOW_COLOR}
+          secondaryColor={GLOW_SECONDARY_COLOR}
+          blockedColor="#ff4d7d"
+        />
       </body>
     </html>
   );

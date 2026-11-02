@@ -23,6 +23,8 @@ type Spine = {
   ty: Float32Array;
   nx: Float32Array;
   ny: Float32Array;
+  /** 0-1 : à quel point la trajectoire tourne serré ici (les brins se resserrent dans un virage). */
+  pinch: Float32Array;
 };
 type Mote = {
   x: number;
@@ -42,6 +44,10 @@ const TAU = Math.PI * 2;
 const TILT = 0.42; // inclinaison de l'hélice : fait apparaître des boucles, pas une simple sinusoïde
 const BLOOM = 0.25; // le halo est peint à 1/4 de résolution puis agrandi : flou doux et peu coûteux
 const CHUNK = 4;
+/** Fenêtre (px, de part et d'autre) sur laquelle la direction des brins est moyennée : un coin ne les fait plus basculer d'un côté à l'autre. */
+const CORNER_WINDOW = 14;
+/** Part du rayon des brins perdue au cœur d'un virage serré : le trait passe le coin en une seule ligne. */
+const CORNER_PINCH = 0.8;
 const RIPPLE_DURATION = 0.6;
 const MAX_MOTES = 90;
 const WHITE: RGB = { r: 255, g: 255, b: 255, a: 1 };
@@ -405,15 +411,15 @@ export default function LifestreamCursor({
   color = "#48ffa5",
   secondaryColor = "#00bfa5",
   opacity = 0.9,
-  length = 320,
-  duration = 1.5,
+  length = 520,
+  duration = 0.4,
   ribbons = 2,
-  width = 8,
-  twist = 0.4,
+  width = 4,
+  twist = 0.3,
   flow = 1,
   glow = 1.2,
   smoothing = 0.3,
-  cursorSize = 10,
+  cursorSize = 7,
   showCursor = true,
   hideNativeCursor = true,
   sparkles = true,
@@ -697,7 +703,25 @@ export default function LifestreamCursor({
         ty: new Float32Array(0),
         nx: new Float32Array(0),
         ny: new Float32Array(0),
+        pinch: new Float32Array(0),
       };
+    }
+
+    /** Moyenne glissante sur une fenêtre en abscisse curviligne (px), à pas irréguliers. */
+    function smoothAlong(values: Float32Array, cum: number[], win: number) {
+      const n = values.length;
+      const prefix = new Float64Array(n + 1);
+      for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + values[i];
+      const out = new Float32Array(n);
+      let lo = 0;
+      let hi = 0;
+      for (let i = 0; i < n; i++) {
+        while (cum[i] - cum[lo] > win) lo++;
+        if (hi < i) hi = i;
+        while (hi + 1 < n && cum[hi + 1] - cum[i] <= win) hi++;
+        out[i] = (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1);
+      }
+      return out;
     }
 
     /** Repères locaux de la colonne ; près de la tête ils rejoignent l'orbite des étincelles. */
@@ -708,6 +732,10 @@ export default function LifestreamCursor({
       sp.ty = new Float32Array(n);
       sp.nx = new Float32Array(n);
       sp.ny = new Float32Array(n);
+      // Directions brutes, entre voisins immédiats : fidèles à la trajectoire, mais elles basculent d'un
+      // point à l'autre dans un coin.
+      const rawX = new Float32Array(n);
+      const rawY = new Float32Array(n);
       let lx = dir.x;
       let ly = dir.y;
       for (let i = 0; i < n; i++) {
@@ -720,9 +748,46 @@ export default function LifestreamCursor({
           lx = dx / d;
           ly = dy / d;
         }
+        rawX[i] = lx;
+        rawY[i] = ly;
+      }
+      // Les décalages des brins s'appuient sur une direction moyennée sur quelques pixels : ils
+      // contournent un coin en arc au lieu de sauter d'un côté à l'autre (ce qui traçait de longues
+      // cordes droites, les « bâtons »). La trajectoire elle-même garde son angle franc.
+      const smX = smoothAlong(rawX, cum, CORNER_WINDOW);
+      const smY = smoothAlong(rawY, cum, CORNER_WINDOW);
+      // Virage local : angle entre la direction avant et après le point, à CORNER_WINDOW de distance.
+      const turn = new Float32Array(n);
+      let lo = 0;
+      let hi = 0;
+      for (let i = 0; i < n; i++) {
+        while (cum[i] - cum[lo] > CORNER_WINDOW) lo++;
+        if (hi < i) hi = i;
+        while (hi + 1 < n && cum[hi + 1] - cum[i] <= CORNER_WINDOW) hi++;
+        const dot = rawX[lo] * rawX[hi] + rawY[lo] * rawY[hi];
+        turn[i] = smoothstep(0.35, 1.4, Math.acos(clamp(dot, -1, 1)));
+      }
+      // Resserrement adouci le long du trait, pour que les brins se ferment et se rouvrent en douceur.
+      sp.pinch = smoothAlong(
+        smoothAlong(turn, cum, CORNER_WINDOW * 1.3),
+        cum,
+        CORNER_WINDOW * 1.3,
+      );
+      for (let i = 0; i < n; i++) {
+        let sx = smX[i];
+        let sy = smY[i];
+        const sl = Math.hypot(sx, sy);
+        if (sl < 0.2) {
+          // Demi-tour : les directions s'annulent, on garde la brute.
+          sx = rawX[i];
+          sy = rawY[i];
+        } else {
+          sx /= sl;
+          sy /= sl;
+        }
         const k = smoothstep(0, 24, cum[i]);
-        let fx = lerp(dir.x, lx, k);
-        let fy = lerp(dir.y, ly, k);
+        let fx = lerp(dir.x, sx, k);
+        let fy = lerp(dir.y, sy, k);
         const fl = Math.hypot(fx, fy) || 1;
         fx /= fl;
         fy /= fl;
@@ -757,7 +822,8 @@ export default function LifestreamCursor({
         rad[i] =
           lerp(R0, spread * speedF * grow, smoothstep(0, 0.22, u)) *
           (1 - 0.55 * smoothstep(0.55, 1, u)) *
-          (0.35 + 0.65 * fresh);
+          (0.35 + 0.65 * fresh) *
+          (1 - CORNER_PINCH * sp.pinch[i]);
         include(p.x, p.y, margin);
       }
 

@@ -8,6 +8,7 @@ import {
   publishLights,
   type PyrefliesLight,
 } from "@/lib/pyreflies-lights";
+import { takeWarmedProgram, warmPrograms } from "@/lib/gl-programs";
 
 type RGB = { r: number; g: number; b: number };
 /** Disposition d'un tampon de sommets : quels attributs, à quel décalage, sur quelle largeur. */
@@ -693,6 +694,8 @@ function compile(gl: WebGLRenderingContext, type: number, src: string) {
 }
 
 function link(gl: WebGLRenderingContext, vs: string, fs: string) {
+  const warmed = takeWarmedProgram(gl, vs, fs, "Pyreflies");
+  if (warmed !== undefined) return warmed;
   const v = compile(gl, gl.VERTEX_SHADER, vs);
   const f = compile(gl, gl.FRAGMENT_SHADER, fs);
   if (!v || !f) {
@@ -718,6 +721,28 @@ function link(gl: WebGLRenderingContext, vs: string, fs: string) {
   }
   return p;
 }
+
+const GL_OPTIONS: WebGLContextAttributes = {
+  alpha: false,
+  antialias: false,
+  depth: false,
+  stencil: false,
+  premultipliedAlpha: false,
+  powerPreference: "low-power",
+  preserveDrawingBuffer: false,
+};
+
+/** Tous les programmes du fond, compilés d'avance en parallèle (cf. lib/gl-programs.ts). */
+const PROGRAM_SOURCES = [
+  [MIST_VS, MIST_FS],
+  [WAKE_VS, WAKE_FS],
+  [FULLSCREEN_VS, COMPOSITE_FS],
+  [ENVELOPE_VS, ENVELOPE_FS],
+  [MEMBRANE_VS, MEMBRANE_FS],
+  [SPARK_VS, SPARK_FS],
+  [ORB_VS, ORB_FS],
+  [PROBE_VS, PROBE_FS],
+] as const;
 
 export type PyrefliesBackgroundProps = {
   tint?: string;
@@ -774,7 +799,7 @@ export default function PyrefliesBackground({
   glow = 0.85,
   background = "#010302",
   overlay = false,
-  orbs = 14,
+  orbs = 4,
   orbSize = 22,
   crossing = 28,
   envelope = 0.2,
@@ -820,15 +845,7 @@ export default function PyrefliesBackground({
     const doc = canvas.ownerDocument;
     const view = doc.defaultView ?? window;
     function initializeRenderer() {
-      const glCtx = canvas.getContext("webgl", {
-        alpha: false,
-        antialias: false,
-        depth: false,
-        stencil: false,
-        premultipliedAlpha: false,
-        powerPreference: "low-power",
-        preserveDrawingBuffer: false,
-      });
+      const glCtx = canvas.getContext("webgl", GL_OPTIONS);
       if (!glCtx) return; // pas de WebGL : le fond CSS reste
       const gl = glCtx;
 
@@ -841,9 +858,18 @@ export default function PyrefliesBackground({
       const sparksPerOrb = Math.round(clamp(sparks, 0, 100));
       const tempoK = clamp(tempo, 0.05, 2);
       const introLen = clamp(introDuration, 0.5, 6);
-      const fpsCap = clamp(maxFps, 24, 120);
-      const maxRatio = clamp(resolution, 0.75, 2);
-      const mistQ = clamp(quality, 0.25, 1);
+      // Écran tactile ou étroit : le fond est plein écran et rempli par plusieurs couches translucides,
+      // son coût vient surtout du nombre de pixels. Résolution, cadence et brume sont allégées.
+      const compact = view.matchMedia(
+        "(pointer: coarse), (max-width: 767px)",
+      ).matches;
+      const fpsCap = clamp(compact ? Math.min(maxFps, 30) : maxFps, 24, 120);
+      const maxRatio = clamp(
+        compact ? Math.min(resolution, 1) : resolution,
+        0.75,
+        2,
+      );
+      const mistQ = clamp(compact ? Math.min(quality, 0.6) : quality, 0.25, 1);
       const tintRGB = parseColor(tint, "#48ffa5");
       const bg = overlay
         ? { r: 0, g: 0, b: 0 }
@@ -1320,8 +1346,14 @@ export default function PyrefliesBackground({
             const offset = (i * LIGHT_SAMPLES + sampleIndex) * 4;
             const coordinate = (axis: number) =>
               lerp(
-                unpack(probePixels[offset + axis], probePixels[offset + axis + 1]),
-                unpack(probePixels[offset + axis + 4], probePixels[offset + axis + 5]),
+                unpack(
+                  probePixels[offset + axis],
+                  probePixels[offset + axis + 1],
+                ),
+                unpack(
+                  probePixels[offset + axis + 4],
+                  probePixels[offset + axis + 5],
+                ),
                 fraction,
               );
             const s = (((t / period + phase) % 1) + 1) % 1;
@@ -1370,7 +1402,13 @@ export default function PyrefliesBackground({
       const minGap = 1000 / fpsCap - 0.5;
       function tick(time: number) {
         frame = 0;
-        if (!visible || doc.hidden || suspended || paused || reducedMotion.matches) {
+        if (
+          !visible ||
+          doc.hidden ||
+          suspended ||
+          paused ||
+          reducedMotion.matches
+        ) {
           previousTime = 0;
           return;
         }
@@ -1461,7 +1499,14 @@ export default function PyrefliesBackground({
     }
 
     // Une restauration WebGL invalide les anciens programmes, textures et tampons.
-    let disposeRenderer = initializeRenderer();
+    // Le premier rendu attend la fin de la compilation des shaders, sans bloquer le thread.
+    let cancelled = false;
+    let disposeRenderer: (() => void) | undefined;
+    const begin = () => {
+      if (!cancelled) disposeRenderer = initializeRenderer();
+    };
+    const warmGl = canvas.getContext("webgl", GL_OPTIONS);
+    if (warmGl) void warmPrograms(warmGl, PROGRAM_SOURCES).then(begin);
     function onLost(event: Event) {
       event.preventDefault();
       disposeRenderer?.();
@@ -1474,6 +1519,7 @@ export default function PyrefliesBackground({
     canvas.addEventListener("webglcontextrestored", onRestored);
 
     return () => {
+      cancelled = true;
       canvas.removeEventListener("webglcontextlost", onLost);
       canvas.removeEventListener("webglcontextrestored", onRestored);
       disposeRenderer?.();

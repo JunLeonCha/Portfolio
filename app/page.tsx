@@ -4,12 +4,10 @@ import Hero from "@/components/Hero";
 import MyJourney from "@/components/MyJourney";
 import MyProjects from "@/components/MyProjects";
 import MyServices from "@/components/MyServices";
-import Preloader from "@/components/Preloader";
 
 export default function Home() {
   return (
     <>
-      <Preloader />
       <main className="px-8 xl:px-24">
         <Hero />
         <MyServices />

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import LifestreamBackground from "@/components/lifestream-background";
+import { GLOW_COLOR, GLOW_SECONDARY_COLOR } from "@/lib/glow-colors";
 import {
   NAME_ACCENT_CLASS,
   NAME_CLASS,
@@ -116,13 +117,29 @@ export default function Preloader() {
       html.style.overflow = "hidden";
       let cancelled = false;
 
+      // Le nom du loader est en position fixe et se pose sur le titre à sa place à l'écran, mesurée
+      // une fois : la page ne doit plus bouger d'ici là. Sans ça, une restauration du scroll après un
+      // rechargement (ou tout défilement programmatique) décale le titre réel, et le nom reste posé
+      // à côté, par-dessus le texte.
+      const previousRestoration = window.history.scrollRestoration;
+      window.history.scrollRestoration = "manual";
+      const holdTop = () => {
+        if (window.scrollY !== 0) window.scrollTo(0, 0);
+      };
+      holdTop();
+      window.addEventListener("scroll", holdTop, { passive: true });
+      const unlockScroll = () => {
+        window.removeEventListener("scroll", holdTop);
+        window.history.scrollRestoration = previousRestoration;
+      };
+
       const reduced = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
-      // Le titre du Hero reste caché : c'est le nom du loader qui viendra s'y poser.
+      // Le titre du Hero reste caché (règle CSS rendue avec le loader, cf. <style> plus bas) :
+      // c'est le nom du loader qui viendra s'y poser.
       const heroName =
         document.querySelector<HTMLElement>("[data-hero='name']");
-      if (heroName && !reduced) gsap.set(heroName, { autoAlpha: 0 });
 
       /**
        * Le nom est écrit à la taille exacte du titre du Hero, puis agrandi en « affiche »,
@@ -178,6 +195,7 @@ export default function Preloader() {
       window.addEventListener("resize", onResize);
 
       const release = () => {
+        unlockScroll();
         html.style.overflow = "";
         setDone(true);
       };
@@ -268,6 +286,7 @@ export default function Preloader() {
 
       return () => {
         cancelled = true;
+        unlockScroll();
         html.style.overflow = "";
         window.removeEventListener("resize", onResize);
       };
@@ -284,6 +303,13 @@ export default function Preloader() {
         <noscript>
           <style>{"[data-preloader]{display:none}"}</style>
         </noscript>
+        {/* Pas de style inline posé par GSAP : le Hero n'est pas forcément hydraté quand cet effet
+            s'exécute, et le DOM serveur doit rester identique. Retiré avec le loader. */}
+        <style>
+          {
+            "@media (prefers-reduced-motion:no-preference){[data-hero='name']{visibility:hidden}}"
+          }
+        </style>
         <span className="sr-only" role="status">
           Chargement du portfolio…
         </span>
@@ -327,6 +353,8 @@ export default function Preloader() {
         className="pointer-events-none fixed inset-x-0 top-[62%] z-100 h-40 -translate-y-1/2 mix-blend-screen"
       >
         <LifestreamBackground
+          color={GLOW_COLOR}
+          secondaryColor={GLOW_SECONDARY_COLOR}
           overlay
           position="absolute"
           zIndex={0}

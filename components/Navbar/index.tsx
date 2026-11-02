@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { onPreloaderDone } from "@/components/Preloader";
 import { NAV_LINKS as LINKS } from "./links";
 
@@ -22,7 +24,7 @@ function WaveLink({ href, label }: { href: string; label: string }) {
   const letters = Array.from(label);
   const last = Math.max(1, letters.length - 1);
   return (
-    <a
+    <Link
       href={href}
       className="group relative block rounded-full px-4 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
     >
@@ -57,7 +59,7 @@ function WaveLink({ href, label }: { href: string; label: string }) {
           );
         })}
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -66,6 +68,17 @@ export default function Navbar() {
   const nav = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
+  const pathname = usePathname();
+  const firstPathname = useRef(pathname);
+
+  // Changement de page : la barre est de nouveau montrée, même si on a quitté la précédente en
+  // la faisant disparaître au défilement (la nouvelle page repart en haut).
+  useEffect(() => {
+    if (firstPathname.current === pathname) return;
+    firstPathname.current = pathname;
+    gsap.killTweensOf(header.current);
+    gsap.set(header.current, { yPercent: 0, autoAlpha: 1 });
+  }, [pathname]);
 
   useGSAP(
     () => {
@@ -86,20 +99,31 @@ export default function Navbar() {
         let ready = false;
         let hidden = false;
 
-        // Entrée : la barre descend quand le loader se lève.
-        gsap.set(header.current, { yPercent: -130, autoAlpha: 0 });
-        const stopWaiting = onPreloaderDone(() => {
-          gsap.to(header.current, {
-            yPercent: 0,
-            autoAlpha: 1,
-            duration: 0.9,
-            delay: 0.25,
-            ease: "power3.out",
-            onComplete: () => {
-              ready = true;
-            },
+        // Entrée : la barre descend quand le loader se lève. Hors loader (autre page, navigation
+        // interne), elle est simplement affichée : cet effet se relance à chaque changement de page,
+        // et ne doit pas recacher une barre que le loader n'attend plus.
+        let stopWaiting = () => {};
+        const waitingForLoader =
+          document.documentElement.dataset.preloaded !== "true" &&
+          document.querySelector("[data-preloader]") !== null;
+        if (waitingForLoader) {
+          gsap.set(header.current, { yPercent: -130, autoAlpha: 0 });
+          stopWaiting = onPreloaderDone(() => {
+            gsap.to(header.current, {
+              yPercent: 0,
+              autoAlpha: 1,
+              duration: 0.9,
+              delay: 0.25,
+              ease: "power3.out",
+              onComplete: () => {
+                ready = true;
+              },
+            });
           });
-        });
+        } else {
+          gsap.set(header.current, { yPercent: 0, autoAlpha: 1 });
+          ready = true;
+        }
 
         // Elle s'efface quand on descend, revient dès qu'on remonte.
         const smart = ScrollTrigger.create({
@@ -178,13 +202,13 @@ export default function Navbar() {
                     style={delay}
                     className={`transition-[opacity,translate] duration-500 ease-out motion-reduce:transition-none ${open ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"}`}
                   >
-                    <a
+                    <Link
                       href={link.href}
                       onClick={() => setOpen(false)}
                       className="block py-4 text-[2.5rem] leading-none tracking-tight transition-colors duration-300 hover:text-primary focus-visible:text-primary focus-visible:outline-2 focus-visible:outline-ring motion-reduce:transition-none"
                     >
                       {link.label}
-                    </a>
+                    </Link>
                   </div>
                   {/* Séparateur : se trace de gauche à droite, dans la même cascade que les liens. */}
                   {i < LINKS.length - 1 && (
@@ -211,8 +235,8 @@ export default function Navbar() {
           data-scrolled="false"
           className="relative z-10 flex items-center justify-between gap-4 rounded-full border border-border/50 bg-surface/30 py-2 pr-2 pl-6 backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-500 data-[scrolled=true]:border-border data-[scrolled=true]:bg-surface/75 data-[scrolled=true]:shadow-[0_8px_32px] data-[scrolled=true]:shadow-black/40 motion-reduce:transition-none"
         >
-          <a
-            href="#"
+          <Link
+            href="/"
             aria-label="Léon Cha, retour à l'accueil"
             onClick={() => setOpen(false)}
             className="rounded-full text-lg leading-none tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
@@ -221,7 +245,7 @@ export default function Navbar() {
             <span className="bg-linear-to-r from-primary to-accent bg-clip-text pr-1 font-serif italic text-transparent">
               Cha
             </span>
-          </a>
+          </Link>
 
           {/* Desktop : chaque lien gère son propre survol en CSS, rien de partagé,
               donc rien à désynchroniser même en balayant vite. */}
