@@ -45,9 +45,18 @@ export default function ScrollReset() {
     historyTarget.current = null;
     if (before === pathname || fromHistory || window.location.hash) return;
     if (withoutLocale(before) === withoutLocale(pathname)) return;
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    // Une fois la page montée (images, polices), les déclencheurs recalculent leurs positions.
-    const frame = requestAnimationFrame(() => ScrollTrigger.refresh());
+    const resetScroll = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    };
+    resetScroll();
+    // Next peut encore ajuster le scroll dans les effets de layout de la page entrante.
+    // On confirme la position après ces effets, avant de recalculer les déclencheurs.
+    const frame = requestAnimationFrame(() => {
+      // Une autre navigation ou une ancre a pu être choisie entre-temps.
+      if (window.location.pathname !== pathname || window.location.hash) return;
+      resetScroll();
+      ScrollTrigger.refresh();
+    });
     return () => cancelAnimationFrame(frame);
   }, [pathname]);
 
