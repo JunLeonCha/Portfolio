@@ -495,7 +495,7 @@ export const fr = {
   },
 
   footer: {
-    leadStart: "Un projet, un poste,",
+    leadStart: "Un projet,",
     leadAccent: "une idée",
     // Espace insécable avant « ? » : il ne part jamais seul à la ligne.
     leadEnd: " ?",

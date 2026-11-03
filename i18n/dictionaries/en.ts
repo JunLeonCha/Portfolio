@@ -459,7 +459,7 @@ export const en: Dictionary = {
   },
 
   footer: {
-    leadStart: "A project, a role,",
+    leadStart: "A project,",
     leadAccent: "an idea",
     leadEnd: "?",
     siteMap: "Site map",
