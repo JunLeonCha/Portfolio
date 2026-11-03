@@ -37,10 +37,10 @@ export type ServiceText = {
 export const fr = {
   meta: {
     siteName: "Léon CHA",
-    title: "Léon CHA | Développeur Fullstack à Nantes",
+    title: "Léon CHA | Développeur Fullstack",
     description:
-      "Développeur Fullstack à Nantes, passionné par le développement web et la création d'expériences interactives.",
-    ogAlt: "Léon Cha, développeur Fullstack à Nantes",
+      "Développeur Fullstack, passionné par le développement web et la création d'expériences interactives.",
+    ogAlt: "Léon Cha, développeur Fullstack",
     jobTitle: "Développeur Fullstack",
     projectsTitle: "Projets | Léon CHA",
     projectsDescription:
@@ -272,7 +272,8 @@ export const fr = {
           "Montée de version d'Angular 16 vers 18",
           "Tests automatiques : unitaires, de composants et de bout en bout avec Cypress",
         ],
-        noImageLabel: "Projet réalisé en alternance : pas de capture disponible",
+        noImageLabel:
+          "Projet réalisé en alternance : pas de capture disponible",
       },
       "saint-gobain": {
         type: "Alternance · Qualité des données",
@@ -283,7 +284,8 @@ export const fr = {
           "Enrichissement des données",
           "Correction automatique des erreurs dans les données",
         ],
-        noImageLabel: "Projet réalisé en alternance : pas de capture disponible",
+        noImageLabel:
+          "Projet réalisé en alternance : pas de capture disponible",
       },
       cepac: {
         type: "Alternance · Applications bancaires",
@@ -294,13 +296,15 @@ export const fr = {
           "Réécriture du code existant pour le rendre plus clair (refactoring)",
           "Optimisation du code",
         ],
-        noImageLabel: "Projet réalisé en alternance : pas de capture disponible",
+        noImageLabel:
+          "Projet réalisé en alternance : pas de capture disponible",
       },
       argus: {
         type: "Alternance · Publication automobile",
         description:
           "Maintenance et évolution d'une application de publication dans le domaine de l'automobile.",
-        noImageLabel: "Projet réalisé en alternance : pas de capture disponible",
+        noImageLabel:
+          "Projet réalisé en alternance : pas de capture disponible",
       },
       "monster-triad": {
         type: "Jeu de cartes web",
