@@ -8,7 +8,7 @@ import {
 } from "@/i18n/config";
 
 export const OG_IMAGE = {
-  url: "/og-image.png",
+  url: "/og-image-v2.png",
   width: 1200,
   height: 630,
 };
