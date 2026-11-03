@@ -467,5 +467,52 @@ export const en: Dictionary = {
     elsewhere: "Elsewhere",
     localTime: "Local time",
     backToTop: "Back to top",
+    legal: "Legal notice",
+  },
+
+  legal: {
+    metaTitle: "Legal notice | Léon CHA",
+    metaDescription:
+      "Legal notice for Léon Cha's portfolio: publisher, host, intellectual property and personal data.",
+    titleStart: "Legal",
+    titleAccent: "notice",
+    updated: "Last updated: November 2026",
+    publisher: {
+      title: "Publisher",
+      name: "Name",
+      email: "Email",
+      location: "Location",
+      locationValue: "Nantes, France",
+      siret: "SIRET",
+    },
+    host: {
+      title: "Hosting",
+      name: "Host",
+      address: "Address",
+      contact: "Contact",
+    },
+    sections: [
+      {
+        title: "Intellectual property",
+        body: [
+          "The content of this website (text, visuals, visual identity) belongs to Léon Cha unless stated otherwise. Any reproduction or reuse without prior permission is prohibited.",
+          "Screenshots and names of projects built for clients or employers remain the property of their respective owners.",
+        ],
+      },
+      {
+        title: "Personal data",
+        body: [
+          "This website collects no personal data: it uses no forms, no analytics and no advertising. Emails you send me are only used to reply to you and are never shared.",
+          "The host may keep technical logs (IP address, browser) needed to run and secure the website.",
+          "Under the GDPR, you can ask to access or delete your data by writing to {email}. You can also lodge a complaint with the CNIL, the French data protection authority (cnil.fr).",
+        ],
+      },
+      {
+        title: "Cookies",
+        body: [
+          "This website uses a single cookie, only to remember the language you chose. It is not used for tracking.",
+        ],
+      },
+    ],
   },
 };

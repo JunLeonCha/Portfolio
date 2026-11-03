@@ -500,6 +500,53 @@ export const fr = {
     elsewhere: "Ailleurs",
     localTime: "Heure locale",
     backToTop: "Retour en haut",
+    legal: "Mentions légales",
+  },
+
+  legal: {
+    metaTitle: "Mentions légales | Léon CHA",
+    metaDescription:
+      "Mentions légales du portfolio de Léon Cha : éditeur, hébergeur, propriété intellectuelle et données personnelles.",
+    titleStart: "Mentions",
+    titleAccent: "légales",
+    updated: "Mise à jour : novembre 2026",
+    publisher: {
+      title: "Éditeur",
+      name: "Nom",
+      email: "E-mail",
+      location: "Localisation",
+      locationValue: "Nantes, France",
+      siret: "SIRET",
+    },
+    host: {
+      title: "Hébergement",
+      name: "Hébergeur",
+      address: "Adresse",
+      contact: "Contact",
+    },
+    sections: [
+      {
+        title: "Propriété intellectuelle",
+        body: [
+          "Les contenus de ce site (textes, visuels, identité graphique) sont la propriété de Léon Cha, sauf mention contraire. Toute reproduction ou réutilisation sans autorisation préalable est interdite.",
+          "Les captures et noms des projets réalisés pour des clients ou des employeurs restent la propriété de leurs titulaires respectifs.",
+        ],
+      },
+      {
+        title: "Données personnelles",
+        body: [
+          "Ce site ne collecte aucune donnée personnelle : il n'utilise ni formulaire, ni outil de mesure d'audience, ni publicité. Les e-mails que vous m'envoyez servent uniquement à vous répondre et ne sont transmis à personne.",
+          "L'hébergeur peut conserver des journaux techniques (adresse IP, navigateur) nécessaires au fonctionnement et à la sécurité du site.",
+          "Conformément au RGPD, vous pouvez demander l'accès à vos données ou leur suppression en m'écrivant à {email}. Vous pouvez aussi adresser une réclamation à la CNIL (cnil.fr).",
+        ],
+      },
+      {
+        title: "Cookies",
+        body: [
+          "Ce site utilise un seul cookie, uniquement pour retenir la langue que vous avez choisie. Il ne sert à aucun suivi.",
+        ],
+      },
+    ],
   },
 };
 

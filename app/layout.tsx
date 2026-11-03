@@ -3,6 +3,7 @@ import "./globals.css";
 import PyrefliesBackground from "@/components/pyreflies-background";
 import LifestreamCursor from "@/components/lifestream-cursor";
 import LangSync from "@/components/LangSync";
+import ScrollReset from "@/components/ScrollReset";
 import Preloader from "@/components/Preloader";
 import { DEFAULT_LOCALE } from "@/i18n/config";
 import { en } from "@/i18n/dictionaries/en";
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col">
         <LangSync />
+        <ScrollReset />
         {/* Dans le layout : monté une seule fois par chargement de document, jamais rejoué par la navigation. */}
         <Preloader loading={{ fr: fr.preloader.loading, en: en.preloader.loading }} />
         <PyrefliesBackground />

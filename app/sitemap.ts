@@ -6,7 +6,12 @@ import { getSiteUrl } from "@/lib/site";
 /** Chaque page existe dans chaque langue ; `alternates` relie les traductions entre elles (hreflang). */
 export default function sitemap(): MetadataRoute.Sitemap {
   const site = getSiteUrl();
-  const paths = ["", "/projets", ...PROJECT_SLUGS.map((s) => `/projets/${s}`)];
+  const paths = [
+    "",
+    "/projets",
+    ...PROJECT_SLUGS.map((s) => `/projets/${s}`),
+    "/mentions-legales",
+  ];
 
   return paths.flatMap((path) => {
     const languages = {

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { INTL_LOCALES, format, type Locale } from "@/i18n/config";
+import { INTL_LOCALES, format, localePath, type Locale } from "@/i18n/config";
 import type { Dictionary } from "@/i18n/dictionaries";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import { CONTACT_LINKS, EMAIL } from "@/components/Contact/contact";
@@ -367,9 +367,17 @@ export default function Footer({
         data-footer="bar"
         className="relative flex items-center justify-between gap-6 border-t border-border/60 py-6 font-mono text-[0.7rem] uppercase tracking-[0.2em] text-muted-foreground"
       >
-        <p>
-          © <span ref={year} />
-          Léon Cha
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span>
+            © <span ref={year} />
+            Léon Cha
+          </span>
+          <Link
+            href={localePath(lang, "/mentions-legales")}
+            className={`hover:text-foreground ${UNDERLINE}`}
+          >
+            {dict.legal}
+          </Link>
         </p>
         <button
           type="button"
