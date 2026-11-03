@@ -20,6 +20,10 @@
   --accent: #c7b8ea;
   --ring: var(--primary);
   --selection: #e8c78f33;
+
+  /* Halo de lisibilité : invisible sur le fond noir, il détache le texte quand une sphère
+     Pyreflies passe derrière. Un contour serré pour la netteté, une ombre large pour le contraste. */
+  --readable-halo: 0 0 2px rgb(0 0 0 / 90%), 0 0 12px rgb(0 0 0 / 70%);
 }
 
 @theme inline {
@@ -48,6 +52,48 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  /* Hérité par tout le contenu : chaque nouveau texte est protégé sans y penser. */
+  text-shadow: var(--readable-halo);
+}
+
+/* Fond clair : le halo noir salirait le texte sombre. */
+.bg-primary {
+  text-shadow: none;
+}
+
+/* Texte en dégradé (couleur transparente) : un text-shadow transparaîtrait à travers les lettres.
+   drop-shadow s'applique au rendu final, dégradé compris. */
+.bg-clip-text {
+  text-shadow: none;
+  filter: drop-shadow(0 0 0.15em rgb(0 0 0 / 70%));
+}
+
+/* Le grand nom du footer est décoratif et déjà éclairé par les sphères : on n'y touche pas. */
+[data-footer="wordmark"],
+[data-footer="wordmark"] .bg-clip-text {
+  text-shadow: none;
+  filter: none;
+}
+
+/* Le fond se met en retrait quand le visiteur le demande. L'opacité du canvas est posée en ligne
+   par le composant : !important est nécessaire pour la remplacer. */
+@media (prefers-reduced-motion: reduce) {
+  /* Figé, une sphère peut rester indéfiniment derrière un texte. */
+  [data-pyreflies-background] canvas {
+    opacity: 0.45 !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  [data-pyreflies-background] canvas {
+    opacity: 0.25 !important;
+  }
+}
+
+@media (forced-colors: active) {
+  [data-pyreflies-background] canvas {
+    display: none;
+  }
 }
 
 ::selection {

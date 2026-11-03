@@ -37,6 +37,14 @@ const ENVELOPE_SEG = 84; // segments de l'enveloppe…
 const ENVELOPE_CAP = 14; // …dont ceux du dôme qui enrobe l'avant de la lumière
 const MEMBRANE_SEG = 64;
 const WAKE_SEG = 48;
+const VEIL_SCALE = 1 / 8; // carte des textes : 1 px pour 8 px CSS, adoucie par le filtrage
+const VEIL_PAD = 40; // marge autour d'un texte (px CSS) : le texte reste au cœur du voile…
+const VEIL_FEATHER = 96; // …qui n'est qu'un flou, sans bord ni coin
+/** Ce qui se lit : le fond s'atténue derrière. `[data-veil]` pour en ajouter à la main.
+    Un `li` qui contient des blocs est couvert par ses enfants, plus serrés que lui. */
+const VEIL_SELECTOR =
+  "h1, h2, h3, h4, h5, h6, p, dt, dd, blockquote, figcaption, label, time, a, button, " +
+  "li:not(:has(p, h1, h2, h3, h4, h5, h6, div, article)), [data-veil]";
 const CORNERS = [
   [-1, -1],
   [1, -1],
@@ -76,6 +84,9 @@ const UNIFORMS = [
   "u_bloom",
   "u_exposure",
   "u_bg",
+  "u_veil",
+  "u_veilK",
+  "u_canvas",
 ];
 
 const clamp = (v: number, min: number, max: number) =>
@@ -272,6 +283,29 @@ vec3 thinFilm(float thick, float cosI) {
 }
 `;
 
+/** Voile de lecture : toute lumière dessinée à l'écran s'atténue derrière les textes.
+    Le contour du voile ondule lentement, comme une brume : jamais une forme géométrique.
+    Attend u_noise et u_t, déclarés avant lui. */
+const VEIL_FS = /* glsl */ `
+uniform sampler2D u_veil;
+uniform float u_veilK;
+uniform vec2 u_canvas;
+float veilNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return texture2D(u_noise, (i + f + 0.5) / ${NOISE_SIZE}.0).r;
+}
+float veil() {
+  vec2 uv = gl_FragCoord.xy / u_canvas;
+  vec2 p = uv * vec2(u_canvas.x / u_canvas.y, 1.0) * 5.0; // ~5 volutes sur la hauteur de l'écran
+  vec2 drift = vec2(veilNoise(p + u_t * 0.12), veilNoise(p + 17.3 - u_t * 0.1)) - 0.5;
+  uv += drift * vec2(u_canvas.y / u_canvas.x, 1.0) * 0.07;
+  float k = texture2D(u_veil, vec2(uv.x, 1.0 - uv.y)).a; // la carte a son origine en haut
+  return 1.0 - u_veilK * k;
+}
+`;
+
 // --- L'enveloppe : une membrane translucide en goutte, qui enrobe la lumière et s'étire en traînée ---
 const ENVELOPE_VS = /* glsl */ `${COMMON_VS}
 attribute vec2 a_r;       // le long (0 = pointe avant → 1 = bout), côté (-1/1)
@@ -326,7 +360,7 @@ void main() {
 }
 `;
 
-const ENVELOPE_FS = /* glsl */ `${COMMON_FS}
+const ENVELOPE_FS = /* glsl */ `${COMMON_FS}${VEIL_FS}
 uniform float u_eK;
 varying float v_v;
 varying float v_k;
@@ -356,7 +390,7 @@ void main() {
   float lit = 0.5 + 1.3 * exp(-k * 4.0);
   float fade = 1.0 - smoothstep(0.25, 0.9, k);
   vec3 col = film * (sheet * outer + rim * 0.4 + folds) * lit;
-  gl_FragColor = vec4(col * fade * v_alpha * u_eK, 1.0);
+  gl_FragColor = vec4(col * fade * v_alpha * u_eK * veil(), 1.0);
 }
 `;
 
@@ -403,7 +437,7 @@ void main() {
 }
 `;
 
-const MEMBRANE_FS = /* glsl */ `${COMMON_FS}
+const MEMBRANE_FS = /* glsl */ `${COMMON_FS}${VEIL_FS}
 uniform float u_mK;
 varying float v_u;
 varying float v_v;
@@ -428,7 +462,7 @@ void main() {
   // Le tissu lui-même est visible (voile translucide), ses fibres et sa lisière un peu plus.
   float body = 0.16 + 0.08 * vnoise(vec2(v_u * 3.0 - u_t * 0.1, v_v * 1.5 + v_seed * 2.0));
   vec3 col = film * (body + 0.28 * fibers + 0.55 * rim) * sheet + vec3(1.0) * rim * 0.08 * sheet;
-  gl_FragColor = vec4(col * fade * v_alpha * u_mK, 1.0);
+  gl_FragColor = vec4(col * fade * v_alpha * u_mK * veil(), 1.0);
 }
 `;
 
@@ -561,6 +595,9 @@ void main() {
 `;
 
 const COMPOSITE_FS = /* glsl */ `${PRECISION}
+uniform float u_t;
+uniform sampler2D u_noise;
+${VEIL_FS}
 uniform sampler2D u_trail;
 uniform vec2 u_texel;
 uniform float u_bloom;
@@ -578,7 +615,7 @@ void main() {
   }
   vec3 light = c + b / 8.0 * u_bloom * 0.45;
   light = 1.0 - exp(-light * u_exposure * 1.6); // les hautes lumières fondent vers le blanc au lieu de clipper
-  gl_FragColor = vec4(u_bg + light, 1.0);
+  gl_FragColor = vec4(u_bg + light * veil(), 1.0);
 }
 `;
 
@@ -598,7 +635,7 @@ void main() {
 }
 `;
 
-const ORB_FS = /* glsl */ `${COMMON_FS}
+const ORB_FS = /* glsl */ `${COMMON_FS}${VEIL_FS}
 uniform float u_glow;
 varying vec2 v_q;
 varying float v_vis;
@@ -612,7 +649,7 @@ void main() {
   vec3 coreCol = mix(vec3(1.0, 0.97, 0.95), u_tint, u_tintK * 0.5);
   // Fenêtre ronde : tout s'éteint bien avant le bord du quad (pas de cadre visible).
   float frame = 1.0 - smoothstep(0.78, 0.98, sqrt(r2) / ${ORB_PAD.toFixed(1)});
-  gl_FragColor = vec4(coreCol * core * v_vis * frame, 1.0);
+  gl_FragColor = vec4(coreCol * core * v_vis * frame * veil(), 1.0);
 }
 `;
 
@@ -668,7 +705,7 @@ void main() {
 }
 `;
 
-const SPARK_FS = /* glsl */ `${COMMON_FS}
+const SPARK_FS = /* glsl */ `${COMMON_FS}${VEIL_FS}
 varying float v_vis;
 varying float v_hue;
 void main() {
@@ -676,7 +713,7 @@ void main() {
   float d2 = dot(q, q);
   if (d2 > 1.0 || v_vis < 0.003) discard;
   vec3 col = vec3(1.0) * exp(-d2 * 30.0) + rainbow(v_hue) * exp(-d2 * 4.0) * 0.6;
-  gl_FragColor = vec4(col * v_vis, 1.0);
+  gl_FragColor = vec4(col * v_vis * veil(), 1.0);
 }
 `;
 
@@ -783,6 +820,8 @@ export type PyrefliesBackgroundProps = {
   position?: "fixed" | "absolute";
   /** Opacité des lueurs uniquement : le fond garde sa couleur. */
   opacity?: number;
+  /** Atténuation des lueurs derrière les textes (0 = aucune, 1 = éteintes) : ils restent lisibles. */
+  veil?: number;
   /** Affiche une composition figée, sans boucle d'animation. */
   paused?: boolean;
   /** -1 place le fond derrière le contenu dans un parent avec isolation: isolate. */
@@ -828,6 +867,7 @@ export default function PyrefliesBackground({
   quality = 1,
   position = "fixed",
   opacity = 0.8,
+  veil = 0.85,
   paused = false,
   zIndex = -1,
   className,
@@ -1131,6 +1171,33 @@ export default function PyrefliesBackground({
       let mistW = 1;
       let mistH = 1;
 
+      // Voile de lecture (unité 3) : la carte des textes visibles, dessinée en 2D puis envoyée au GPU.
+      // Sans elle, le voile est coupé (une texture absente se lit opaque : tout serait éteint).
+      const veilTex = gl.createTexture();
+      const veilCanvas = doc.createElement("canvas");
+      const veilCtx = veilCanvas.getContext("2d");
+      const veilK = veilTex && veilCtx ? clamp(veil, 0, 1) : 0;
+      if (veilTex) {
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, veilTex);
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.RGBA,
+          1,
+          1,
+          0,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          new Uint8Array(4),
+        );
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.activeTexture(gl.TEXTURE0);
+      }
+
       // Sonde : positions présentes et futures, calculées avec le même shader que le fond.
       const probeTex = gl.createTexture();
       const probeFbo = gl.createFramebuffer();
@@ -1174,6 +1241,8 @@ export default function PyrefliesBackground({
         const L = m.locs;
         gl.uniform1i(L.u_noise, 1);
         gl.uniform1i(L.u_trail, 0);
+        gl.uniform1i(L.u_veil, 3);
+        gl.uniform1f(L.u_veilK, veilK);
         gl.uniform1f(L.u_life, clamp(mistLength, 1, 8));
         gl.uniform1f(L.u_turb, clamp(turbulence, 0, 3));
         gl.uniform1f(L.u_hue, clamp(bands, 0, 2));
@@ -1276,6 +1345,7 @@ export default function PyrefliesBackground({
         gl.uniform1f(L.u_time, t);
         gl.uniform1f(L.u_t, t);
         gl.uniform2f(L.u_texel, 1 / mistW, 1 / mistH);
+        gl.uniform2f(L.u_canvas, canvas!.width, canvas!.height);
         gl.bindBuffer(gl.ARRAY_BUFFER, m.layout.buffer);
         for (const a of m.layout.attrs) {
           if (a.loc < 0) continue;
@@ -1297,6 +1367,97 @@ export default function PyrefliesBackground({
         }
         for (const a of m.layout.attrs)
           if (a.loc >= 0) gl.disableVertexAttribArray(a.loc);
+      }
+
+      // ---------- Voile de lecture ----------
+      // Seuls les textes proches de l'écran sont mesurés ; la liste se refait quand la page change.
+      const veilTargets = new Set<Element>();
+      const veilIo = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) veilTargets.add(entry.target);
+            else veilTargets.delete(entry.target);
+          }
+          scheduleStill();
+        },
+        { rootMargin: "50% 0px" },
+      );
+      function collectVeilTargets() {
+        veilIo.disconnect();
+        veilTargets.clear();
+        for (const el of doc.querySelectorAll(VEIL_SELECTOR))
+          if (!root!.contains(el)) veilIo.observe(el);
+      }
+      let veilCollect = 0;
+      const veilMo = new MutationObserver(() => {
+        view.clearTimeout(veilCollect);
+        veilCollect = view.setTimeout(collectVeilTargets, 150);
+      });
+      if (veilK > 0) {
+        collectVeilTargets();
+        veilMo.observe(doc.body, { childList: true, subtree: true });
+      }
+      const veilRange = doc.createRange();
+      let veilSignature = "";
+
+      /** Redessine la carte des textes, et ne l'envoie au GPU que si elle a changé. */
+      function updateVeil() {
+        if (veilK <= 0 || !veilCtx) return;
+        const box = root!.getBoundingClientRect();
+        const vw = Math.max(1, Math.round(w * VEIL_SCALE));
+        const vh = Math.max(1, Math.round(h * VEIL_SCALE));
+        if (veilCanvas.width !== vw || veilCanvas.height !== vh) {
+          veilCanvas.width = vw;
+          veilCanvas.height = vh;
+          veilSignature = "";
+        }
+        const rects: number[] = [];
+        for (const el of veilTargets) {
+          if (el.checkVisibility && !el.checkVisibility({ visibilityProperty: true }))
+            continue; // masqué (menu fermé, onglet inactif…)
+          // Le contenu plutôt que la boîte : un titre court ne réserve pas toute la largeur.
+          veilRange.selectNodeContents(el);
+          const r = veilRange.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          if (r.bottom < box.top || r.top > box.bottom) continue;
+          if (r.right < box.left || r.left > box.right) continue;
+          // Au quart de pixel de carte (2 px CSS) : assez fin pour un défilement fluide.
+          const q = (v: number) => Math.round(v * VEIL_SCALE * 4) / 4;
+          rects.push(
+            q(r.left - box.left - VEIL_PAD),
+            q(r.top - box.top - VEIL_PAD),
+            q(r.width + VEIL_PAD * 2),
+            q(r.height + VEIL_PAD * 2),
+          );
+        }
+        const signature = rects.join(",");
+        if (signature === veilSignature) return;
+        veilSignature = signature;
+        veilCtx.clearRect(0, 0, vw, vh);
+        // Des pilules tracées hors champ : seule leur ombre floue tombe sur la carte, un dégradé
+        // continu sans bord net. Un seul tracé : les zones voisines se fondent en une même nappe.
+        // La carte se lit dans son alpha.
+        const off = vw + vh + 256;
+        veilCtx.fillStyle = veilCtx.shadowColor = "#fff";
+        veilCtx.shadowBlur = VEIL_FEATHER * VEIL_SCALE;
+        veilCtx.shadowOffsetX = off;
+        veilCtx.beginPath();
+        for (let i = 0; i < rects.length; i += 4) {
+          const [x, y, rw, rh] = rects.slice(i, i + 4);
+          veilCtx.roundRect(x - off, y, rw, rh, Math.min(rw, rh) / 2);
+        }
+        veilCtx.fill();
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, veilTex);
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.RGBA,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          veilCanvas,
+        );
+        gl.activeTexture(gl.TEXTURE0);
       }
 
       /**
@@ -1371,6 +1532,7 @@ export default function PyrefliesBackground({
 
       function render(t: number) {
         probeLights(t);
+        updateVeil();
         // 1. La brume et son sillage, dans le tampon réduit, en lumière additive.
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, null); // le tampon ne doit pas être lu pendant qu'on y écrit
@@ -1437,6 +1599,15 @@ export default function PyrefliesBackground({
         frame = 0;
         previousTime = 0;
       }
+      // Fond figé (pause, mouvement réduit) : le voile doit quand même suivre le défilement.
+      let stillFrame = 0;
+      function scheduleStill() {
+        if (frame || stillFrame || waiting || !visible || doc.hidden) return;
+        stillFrame = view.requestAnimationFrame(() => {
+          stillFrame = 0;
+          if (!frame) render(clock);
+        });
+      }
 
       // ---------- Événements ----------
       function onVisibility() {
@@ -1469,6 +1640,8 @@ export default function PyrefliesBackground({
       io.observe(root);
       doc.addEventListener("visibilitychange", onVisibility);
       reducedMotion.addEventListener("change", onMotionChange);
+      if (veilK > 0)
+        view.addEventListener("scroll", scheduleStill, { passive: true });
       const stopObservingPause = subscribeToBackgroundPause((isPaused) => {
         suspended = isPaused;
         if (suspended) stop();
@@ -1483,6 +1656,11 @@ export default function PyrefliesBackground({
         stopObservingPause();
         stopWaiting();
         stop();
+        view.cancelAnimationFrame(stillFrame);
+        view.clearTimeout(veilCollect);
+        view.removeEventListener("scroll", scheduleStill);
+        veilIo.disconnect();
+        veilMo.disconnect();
         resizeObserver.disconnect();
         io.disconnect();
         view.removeEventListener("resize", onResize);
@@ -1494,6 +1672,7 @@ export default function PyrefliesBackground({
         gl.deleteFramebuffer(mistFbo);
         gl.deleteTexture(probeTex);
         gl.deleteFramebuffer(probeFbo);
+        gl.deleteTexture(veilTex);
         publishLights([]); // plus de fond : plus de lumières
       };
     }
@@ -1559,6 +1738,7 @@ export default function PyrefliesBackground({
     maxFps,
     resolution,
     quality,
+    veil,
     paused,
   ]);
 

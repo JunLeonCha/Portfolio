@@ -74,9 +74,14 @@ export default function Hero({ dict }: { dict: Dictionary["hero"] }) {
       mm.add("(prefers-reduced-motion: no-preference)", () => {
         let trigger: ScrollTrigger | undefined;
         const stopWaiting = onPreloaderLanded(() => {
+          // Appelé par un événement, hors du contexte GSAP : le titre est cherché dans le Hero
+          // lui-même, et rien n'est créé s'il a été démonté entre-temps.
+          const section = root.current;
+          const name = section?.querySelector("[data-hero='name']");
+          if (!section || !name) return;
           const reveal = gsap
             .fromTo(
-              "[data-hero='name']",
+              name,
               { yPercent: 40, autoAlpha: 0, filter: "blur(10px)" },
               {
                 yPercent: 0,
@@ -90,7 +95,7 @@ export default function Hero({ dict }: { dict: Dictionary["hero"] }) {
             )
             .progress(1);
           trigger = ScrollTrigger.create({
-            trigger: root.current,
+            trigger: section,
             start: "top 80%",
             end: "bottom 20%",
             animation: reveal,
